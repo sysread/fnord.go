@@ -19,9 +19,9 @@ type chatView struct {
 	conversation []common.ChatMessage
 
 	*tview.Frame
-	messagePane *tview.TextView
-	userInput   *tview.TextArea
 	container   *tview.Flex
+	messagePane *tview.TextView
+	userInput   *chatInput
 }
 
 func (ui *UI) newChatView() chatView {
@@ -63,34 +63,11 @@ func (cv chatView) SetFocus(ui *UI) {
 	ui.app.SetFocus(cv.userInput)
 }
 
-func (cv *chatView) buildChatUserInput() *tview.TextArea {
-	input := tview.NewTextArea()
-	input.SetBorder(true)
-	input.SetTitle("Type your message here")
-
-	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlSpace {
-			text := input.GetText()
-
-			msg := common.ChatMessage{
-				From:    common.You,
-				Content: text,
-			}
-
-			cv.addMessage(msg)
-
-			input.SetText("", false)
-
-			go cv.getResponse()
-
-			// Return nil to indicate the event has been handled
-			return nil
-		}
-
-		return event
+func (cv *chatView) buildChatUserInput() *chatInput {
+	return newChatInput(func(msg common.ChatMessage) {
+		cv.addMessage(msg)
+		cv.getResponse()
 	})
-
-	return input
 }
 
 func (cv *chatView) buildChatMessagePane() *tview.TextView {
