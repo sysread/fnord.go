@@ -6,7 +6,7 @@ import (
 )
 
 type keyBinding struct {
-	key   rune
+	key   string
 	label string
 }
 
@@ -15,10 +15,10 @@ type screenArgs struct {
 	keys  []keyBinding
 }
 
-func (ui *UI) newScreen(widget tview.Primitive, args screenArgs) tview.Primitive {
+func (ui *UI) newScreen(widget tview.Primitive, args screenArgs) *tview.Frame {
 	keyLabels := ""
 	for i, key := range args.keys {
-		label := "[blue]" + string(key.key) + "[-] " + key.label
+		label := "[blue]" + key.key + "[-] " + key.label
 
 		if i > 0 {
 			keyLabels += " | "

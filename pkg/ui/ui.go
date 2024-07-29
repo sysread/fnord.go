@@ -5,7 +5,8 @@ import (
 )
 
 type UI struct {
-	app *tview.Application
+	app         *tview.Application
+	CurrentView tview.Primitive
 }
 
 func New() *UI {
@@ -32,6 +33,7 @@ func (ui *UI) Quit() {
 }
 
 func (ui *UI) Open(view tview.Primitive, fullScreen bool) {
+	ui.CurrentView = view
 	ui.app.SetRoot(view, fullScreen).SetFocus(view)
 }
 
@@ -48,4 +50,5 @@ func (ui *UI) OpenHelp() {
 func (ui *UI) OpenChat() {
 	chatView := ui.newChatView()
 	ui.Open(chatView, true)
+	chatView.SetFocus(ui)
 }

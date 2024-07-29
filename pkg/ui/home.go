@@ -6,10 +6,7 @@ import (
 )
 
 func (ui *UI) newHomeView() tview.Primitive {
-	home := tview.NewTextView()
-
-	home.SetTextAlign(tview.AlignCenter)
-	home.SetDynamicColors(true)
+	home := tview.NewFlex()
 
 	home.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
@@ -27,9 +24,9 @@ func (ui *UI) newHomeView() tview.Primitive {
 	return ui.newScreen(home, screenArgs{
 		title: "Fnord",
 		keys: []keyBinding{
-			{'c', "chat"},
-			{'?', "help"},
-			{'q', "quit"},
+			{"c", "chat"},
+			{"?", "help"},
+			{"q", "quit"},
 		},
 	})
 }

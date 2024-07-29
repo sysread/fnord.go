@@ -33,7 +33,7 @@ Key bindings:
 	return ui.newScreen(help, screenArgs{
 		title: "Help",
 		keys: []keyBinding{
-			{'q', "home"},
+			{"q", "home"},
 		},
 	})
 }
