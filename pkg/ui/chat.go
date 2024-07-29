@@ -5,9 +5,19 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+
+	"github.com/sysread/fnord/pkg/common"
+	"github.com/sysread/fnord/pkg/debug"
+	"github.com/sysread/fnord/pkg/gpt"
 )
 
 type chatView struct {
+	ui *UI
+
+	gptClient *gpt.OpenAIClient
+
+	conversation []common.ChatMessage
+
 	*tview.Frame
 	messagePane *tview.TextView
 	userInput   *tview.TextArea
@@ -15,7 +25,11 @@ type chatView struct {
 }
 
 func (ui *UI) newChatView() chatView {
-	cv := chatView{}
+	cv := chatView{
+		ui:           ui,
+		gptClient:    gpt.NewOpenAIClient(),
+		conversation: []common.ChatMessage{},
+	}
 
 	cv.messagePane = cv.buildChatMessagePane()
 	cv.userInput = cv.buildChatUserInput()
@@ -29,13 +43,13 @@ func (ui *UI) newChatView() chatView {
 		title: "Chat",
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
-			{"q", "home"},
+			{"esc", "home"},
 		},
 	})
 
 	cv.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'q':
+		switch event.Key() {
+		case tcell.KeyEscape:
 			ui.OpenHome()
 		}
 
@@ -58,11 +72,16 @@ func (cv *chatView) buildChatUserInput() *tview.TextArea {
 		if event.Key() == tcell.KeyCtrlSpace {
 			text := input.GetText()
 
-			if text != "" {
-				fmt.Fprintf(cv.messagePane, "[blue]You:\n\n[white]%s\n\n", text)
+			msg := common.ChatMessage{
+				From:    common.You,
+				Content: text,
 			}
 
+			cv.addMessage(msg)
+
 			input.SetText("", false)
+
+			go cv.getResponse()
 
 			// Return nil to indicate the event has been handled
 			return nil
@@ -88,14 +107,14 @@ func (cv *chatView) buildChatMessagePane() *tview.TextView {
 	return chatHistory
 }
 
-func (cv *chatView) newChatMessage(from string, message string) tview.Primitive {
+func (cv *chatView) newChatMessage(msg common.ChatMessage) tview.Primitive {
 	senderBox := tview.NewTextView()
-	senderBox.SetText(from)
+	senderBox.SetText(string(msg.From))
 	senderBox.SetBackgroundColor(tcell.ColorLightGreen)
 	senderBox.SetTextColor(tcell.ColorBlack)
 
 	messageBox := tview.NewTextView()
-	messageBox.SetText(message)
+	messageBox.SetText(msg.Content)
 
 	flex := tview.NewFlex()
 	flex.SetDirection(tview.FlexRow)
@@ -103,4 +122,39 @@ func (cv *chatView) newChatMessage(from string, message string) tview.Primitive 
 	flex.AddItem(messageBox, 0, 8, false)
 
 	return flex
+}
+
+func (cv *chatView) addMessage(msg common.ChatMessage) {
+	debug.Log("Adding message to chat: %v", msg)
+
+	if msg.Content == "" {
+		return
+	}
+
+	cv.conversation = append(cv.conversation, msg)
+
+	color := "blue"
+	if msg.From != common.You {
+		color = "green"
+	}
+
+	fmt.Fprintf(cv.messagePane, "[%s]%s:\n\n[white]%s\n\n", color, msg.From, msg.Content)
+}
+
+func (cv *chatView) getResponse() {
+	debug.Log("Getting response from GPT")
+
+	response, err := cv.gptClient.GetCompletion(cv.conversation)
+
+	debug.Log("Response from GPT: %s", response)
+	debug.Log("Error from GPT: %v", err)
+
+	msg := common.ChatMessage{
+		From:    common.Assistant,
+		Content: response,
+	}
+
+	cv.ui.app.QueueUpdateDraw(func() {
+		cv.addMessage(msg)
+	})
 }

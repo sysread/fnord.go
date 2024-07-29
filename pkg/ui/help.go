@@ -9,10 +9,10 @@ func (ui *UI) newHelpView() tview.Primitive {
 	helpText := `
 Key bindings:
 
-	[blue]c[-] - Start a new chat
+	[blue]     c[-] - Start a new chat
 
-	[blue]?[-] - Show this help
-	[blue]q[-] - Quit the application
+	[blue]     ?[-] - Show this help
+	[blue]Escape[-] - Quit the application
 	`
 
 	help := tview.NewTextView()
