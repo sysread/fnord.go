@@ -20,7 +20,7 @@ type chatView struct {
 
 	*tview.Frame
 	container   *tview.Flex
-	messagePane *tview.TextView
+	messageList *tview.TextView
 	userInput   *chatInput
 }
 
@@ -31,12 +31,23 @@ func (ui *UI) newChatView() chatView {
 		conversation: []common.ChatMessage{},
 	}
 
-	cv.messagePane = cv.buildChatMessagePane()
-	cv.userInput = cv.buildChatUserInput()
+	cv.messageList = tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetScrollable(true).
+		// Auto-scroll to the bottom when new content is added
+		SetChangedFunc(func() {
+			cv.messageList.ScrollToEnd()
+		})
+
+	cv.userInput = newChatInput(func(msg common.ChatMessage) {
+		cv.addMessage(msg)
+		cv.getResponse()
+	})
 
 	cv.container = tview.NewFlex()
 	cv.container.SetDirection(tview.FlexRow)
-	cv.container.AddItem(cv.messagePane, 0, 5, false)
+	cv.container.AddItem(cv.messageList, 0, 5, false)
 	cv.container.AddItem(cv.userInput, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
@@ -63,28 +74,7 @@ func (cv chatView) SetFocus(ui *UI) {
 	ui.app.SetFocus(cv.userInput)
 }
 
-func (cv *chatView) buildChatUserInput() *chatInput {
-	return newChatInput(func(msg common.ChatMessage) {
-		cv.addMessage(msg)
-		cv.getResponse()
-	})
-}
-
-func (cv *chatView) buildChatMessagePane() *tview.TextView {
-	chatHistory := tview.NewTextView().
-		SetDynamicColors(true).
-		SetRegions(true).
-		SetScrollable(true)
-
-	// Auto-scroll to the bottom when new content is added
-	chatHistory.SetChangedFunc(func() {
-		chatHistory.ScrollToEnd()
-	})
-
-	return chatHistory
-}
-
-func (cv *chatView) newChatMessage(msg common.ChatMessage) tview.Primitive {
+func (cv *chatView) newMessage(msg common.ChatMessage) tview.Primitive {
 	senderBox := tview.NewTextView()
 	senderBox.SetText(string(msg.From))
 	senderBox.SetBackgroundColor(tcell.ColorLightGreen)
@@ -115,7 +105,7 @@ func (cv *chatView) addMessage(msg common.ChatMessage) {
 		color = "green"
 	}
 
-	fmt.Fprintf(cv.messagePane, "[%s]%s:\n\n[white]%s\n\n", color, msg.From, msg.Content)
+	fmt.Fprintf(cv.messageList, "[%s]%s:\n\n[white]%s\n\n", color, msg.From, msg.Content)
 }
 
 func (cv *chatView) getResponse() {
