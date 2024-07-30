@@ -11,6 +11,10 @@ import (
 	"github.com/sysread/fnord/pkg/gpt"
 )
 
+type chatInput struct {
+	*tview.TextArea
+}
+
 type chatView struct {
 	ui *UI
 
@@ -31,24 +35,17 @@ func (ui *UI) newChatView() chatView {
 		conversation: []common.ChatMessage{},
 	}
 
+	cv.userInput = newChatInput(cv.getNextAssistantResponse)
+
 	cv.messageList = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
-		SetScrollable(true).
-		// Auto-scroll to the bottom when new content is added
-		SetChangedFunc(func() {
-			cv.messageList.ScrollToEnd()
-		})
+		SetScrollable(true)
 
-	cv.userInput = newChatInput(func(msg common.ChatMessage) {
-		cv.addMessage(msg)
-		cv.getResponse()
-	})
-
-	cv.container = tview.NewFlex()
-	cv.container.SetDirection(tview.FlexRow)
-	cv.container.AddItem(cv.messageList, 0, 5, false)
-	cv.container.AddItem(cv.userInput, 0, 1, false)
+	cv.container = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(cv.messageList, 0, 5, false).
+		AddItem(cv.userInput, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
 		title: "Chat",
@@ -70,10 +67,76 @@ func (ui *UI) newChatView() chatView {
 	return cv
 }
 
+// Focuses the chat input when the chat view is opened
 func (cv chatView) SetFocus(ui *UI) {
 	ui.app.SetFocus(cv.userInput)
 }
 
+// Builds the chatInput component, which is a text area that captures user
+// input and sends it to the assistant when the user presses Ctrl+Space.
+func newChatInput(onNewMessage func(common.ChatMessage)) *chatInput {
+	chatInput := &chatInput{
+		TextArea: tview.NewTextArea(),
+	}
+
+	chatInput.SetBorder(true)
+	chatInput.SetTitle("Type your message here")
+
+	chatInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if chatInput.GetDisabled() {
+			return event
+		}
+
+		if event.Key() == tcell.KeyCtrlSpace {
+			chatInput.SetDisabled(true)
+
+			msg := common.ChatMessage{
+				From:    common.You,
+				Content: chatInput.GetText(),
+			}
+
+			chatInput.SetText("", false)
+
+			done := make(chan struct{})
+
+			go func() {
+				onNewMessage(msg)
+				done <- struct{}{}
+			}()
+
+			go func() {
+				<-done
+				chatInput.SetDisabled(false)
+			}()
+
+			// Return nil to indicate the event has been handled
+			return nil
+		}
+
+		return event
+	})
+
+	return chatInput
+}
+
+// Callback used by chatInput to get the next chat completion response from GPT.
+func (cv *chatView) getNextAssistantResponse(msg common.ChatMessage) {
+	cv.addMessage(msg)
+
+	response, _ := cv.gptClient.GetCompletion(cv.conversation)
+
+	newMsg := common.ChatMessage{
+		From:    common.Assistant,
+		Content: response,
+	}
+
+	cv.ui.app.QueueUpdateDraw(func() {
+		cv.addMessage(newMsg)
+	})
+}
+
+// Creates a new message view with the sender and message content. This is the
+// primitive that is added to the chat view.
 func (cv *chatView) newMessage(msg common.ChatMessage) tview.Primitive {
 	senderBox := tview.NewTextView()
 	senderBox.SetText(string(msg.From))
@@ -91,6 +154,9 @@ func (cv *chatView) newMessage(msg common.ChatMessage) tview.Primitive {
 	return flex
 }
 
+// Adds a message to the chat view. This is the function that is called when a
+// new message is received from the chat input or a new response is generated
+// by the assistant.
 func (cv *chatView) addMessage(msg common.ChatMessage) {
 	debug.Log("Adding message to chat: %v", msg)
 
@@ -106,22 +172,7 @@ func (cv *chatView) addMessage(msg common.ChatMessage) {
 	}
 
 	fmt.Fprintf(cv.messageList, "[%s]%s:\n\n[white]%s\n\n", color, msg.From, msg.Content)
-}
 
-func (cv *chatView) getResponse() {
-	debug.Log("Getting response from GPT")
-
-	response, err := cv.gptClient.GetCompletion(cv.conversation)
-
-	debug.Log("Response from GPT: %s", response)
-	debug.Log("Error from GPT: %v", err)
-
-	msg := common.ChatMessage{
-		From:    common.Assistant,
-		Content: response,
-	}
-
-	cv.ui.app.QueueUpdateDraw(func() {
-		cv.addMessage(msg)
-	})
+	// Scroll to the last message when a new message is added
+	cv.messageList.ScrollToEnd()
 }
