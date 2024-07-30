@@ -6,8 +6,6 @@ import (
 	"os"
 
 	openai "github.com/sashabaranov/go-openai"
-
-	"github.com/sysread/fnord/pkg/common"
 )
 
 type OpenAIClient struct {
@@ -20,17 +18,12 @@ func NewOpenAIClient() *OpenAIClient {
 	return &OpenAIClient{client: client}
 }
 
-func (c *OpenAIClient) GetCompletion(conversation []common.ChatMessage) (string, error) {
-	messages := []openai.ChatCompletionMessage{}
-	for _, message := range conversation {
-		messages = append(messages, message.ApiMessage())
-	}
-
+func (c *OpenAIClient) GetCompletion(conversation Conversation) (string, error) {
 	res, err := c.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
 			Model:    openai.GPT4o,
-			Messages: messages,
+			Messages: conversation.ChatCompletionMessages(),
 		},
 	)
 

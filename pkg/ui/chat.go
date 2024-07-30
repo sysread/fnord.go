@@ -6,8 +6,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"github.com/sysread/fnord/pkg/common"
-	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/gpt"
 )
 
@@ -20,7 +18,7 @@ type chatView struct {
 
 	gptClient *gpt.OpenAIClient
 
-	conversation common.Conversation
+	conversation gpt.Conversation
 
 	*tview.Frame
 	container   *tview.Flex
@@ -32,10 +30,10 @@ func (ui *UI) newChatView() chatView {
 	cv := chatView{
 		ui:           ui,
 		gptClient:    gpt.NewOpenAIClient(),
-		conversation: []common.ChatMessage{},
+		conversation: []gpt.ChatMessage{},
 	}
 
-	cv.userInput = newChatInput(cv.getNextAssistantResponse)
+	cv.userInput = cv.newChatInput()
 
 	cv.messageList = tview.NewTextView().
 		SetDynamicColors(true).
@@ -68,13 +66,13 @@ func (ui *UI) newChatView() chatView {
 }
 
 // Focuses the chat input when the chat view is opened
-func (cv chatView) SetFocus(ui *UI) {
+func (cv *chatView) SetFocus(ui *UI) {
 	ui.app.SetFocus(cv.userInput)
 }
 
 // Builds the chatInput component, which is a text area that captures user
 // input and sends it to the assistant when the user presses Ctrl+Space.
-func newChatInput(onNewMessage func(common.ChatMessage)) *chatInput {
+func (cv *chatView) newChatInput() *chatInput {
 	chatInput := &chatInput{
 		TextArea: tview.NewTextArea(),
 	}
@@ -88,25 +86,50 @@ func newChatInput(onNewMessage func(common.ChatMessage)) *chatInput {
 		}
 
 		if event.Key() == tcell.KeyCtrlSpace {
+			// Disable the chat input while the assistant is responding
 			chatInput.SetDisabled(true)
 
-			msg := common.ChatMessage{
-				From:    common.You,
-				Content: chatInput.GetText(),
-			}
+			// TODO handle error
+			messages, _ := gpt.ParseMessage(gpt.You, chatInput.GetText())
 
+			// Clear the chat input after the user has sent the message
 			chatInput.SetText("", false)
 
+			// Create a channel to signal when the assistant has finished
 			done := make(chan struct{})
 
+			// Send the user message to the assistant and get the response
 			go func() {
-				onNewMessage(msg)
+				for _, message := range messages {
+					// Add the user message to the chat view and conversation.
+					cv.ui.app.QueueUpdateDraw(func() {
+						cv.addMessage(message)
+					})
+				}
+
+				// Get the assistant's response
+				response, _ := cv.gptClient.GetCompletion(cv.conversation)
+				responseMessage := gpt.ChatMessage{
+					From:    gpt.Assistant,
+					Content: response,
+				}
+
+				// Add the assistant's response to the chat view and
+				// conversation.
+				cv.ui.app.QueueUpdateDraw(func() {
+					cv.addMessage(responseMessage)
+				})
+
 				done <- struct{}{}
 			}()
 
+			// Re-enable the chat input when the assistant has finished
 			go func() {
 				<-done
-				chatInput.SetDisabled(false)
+
+				cv.ui.app.QueueUpdateDraw(func() {
+					chatInput.SetDisabled(false)
+				})
 			}()
 
 			// Return nil to indicate the event has been handled
@@ -119,55 +142,24 @@ func newChatInput(onNewMessage func(common.ChatMessage)) *chatInput {
 	return chatInput
 }
 
-// Callback used by chatInput to get the next chat completion response from GPT.
-func (cv *chatView) getNextAssistantResponse(msg common.ChatMessage) {
-	cv.addMessage(msg)
-
-	response, _ := cv.gptClient.GetCompletion(cv.conversation)
-
-	newMsg := common.ChatMessage{
-		From:    common.Assistant,
-		Content: response,
-	}
-
-	cv.ui.app.QueueUpdateDraw(func() {
-		cv.addMessage(newMsg)
-	})
-}
-
-// Creates a new message view with the sender and message content. This is the
-// primitive that is added to the chat view.
-func (cv *chatView) newMessage(msg common.ChatMessage) tview.Primitive {
-	senderBox := tview.NewTextView()
-	senderBox.SetText(string(msg.From))
-	senderBox.SetBackgroundColor(tcell.ColorLightGreen)
-	senderBox.SetTextColor(tcell.ColorBlack)
-
-	messageBox := tview.NewTextView()
-	messageBox.SetText(msg.Content)
-
-	flex := tview.NewFlex()
-	flex.SetDirection(tview.FlexRow)
-	flex.AddItem(senderBox, 1, 0, false)
-	flex.AddItem(messageBox, 0, 8, false)
-
-	return flex
-}
-
 // Adds a message to the chat view. This is the function that is called when a
 // new message is received from the chat input or a new response is generated
 // by the assistant.
-func (cv *chatView) addMessage(msg common.ChatMessage) {
-	debug.Log("Adding message to chat: %v", msg)
+func (cv *chatView) addMessage(msg gpt.ChatMessage) {
+	// Append the message to the conversation
+	cv.conversation = append(cv.conversation, msg)
 
-	if msg.Content == "" {
+	// Action messages may include messages that are not to be displayed, like
+	// the contents of a file chunk. In this case, we don't want to add the
+	// message to the visible message list. However, we still want to add it to
+	// the conversation.
+	if msg.IsHidden {
 		return
 	}
 
-	cv.conversation = append(cv.conversation, msg)
-
+	// Create a new message view and add it to the message list
 	color := "blue"
-	if msg.From != common.You {
+	if msg.From != gpt.You {
 		color = "green"
 	}
 
