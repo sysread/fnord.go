@@ -23,15 +23,7 @@ func NewOpenAIClient() *OpenAIClient {
 func (c *OpenAIClient) GetCompletion(conversation []common.ChatMessage) (string, error) {
 	messages := []openai.ChatCompletionMessage{}
 	for _, message := range conversation {
-		role := openai.ChatMessageRoleUser
-		if message.From != common.You {
-			role = openai.ChatMessageRoleAssistant
-		}
-
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    role,
-			Content: message.Content,
-		})
+		messages = append(messages, message.ApiMessage())
 	}
 
 	res, err := c.client.CreateChatCompletion(
