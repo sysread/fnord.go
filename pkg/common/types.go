@@ -16,6 +16,8 @@ type ChatMessage struct {
 	Content string
 }
 
+type Conversation []ChatMessage
+
 func (m ChatMessage) Role() string {
 	role := openai.ChatMessageRoleUser
 

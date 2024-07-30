@@ -20,7 +20,7 @@ type chatView struct {
 
 	gptClient *gpt.OpenAIClient
 
-	conversation []common.ChatMessage
+	conversation common.Conversation
 
 	*tview.Frame
 	container   *tview.Flex
