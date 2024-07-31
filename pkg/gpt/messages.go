@@ -19,7 +19,7 @@ const (
 	// as part of a conversation message, we can split it up into smaller
 	// chunks. 30k is a safe limit, lower than needed to avoid hitting the
 	// token limit.
-	MaxFileChunkSize = 30_000
+	MaxChunkSize = 30_000
 )
 
 type ChatMessage struct {
@@ -162,15 +162,20 @@ func getAction(line string) (bool, string, string) {
 // message. For larger files, this requires splitting the file into smaller
 // chunks that can be sent as part of the conversation.
 func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
-	parts := []string{}
-
 	file, err := os.Open(filePath)
+
 	if err != nil {
-		return parts, err
+		return []string{}, err
 	}
+
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	return splitIntoDigestibleChunks(bufio.NewScanner(file))
+}
+
+func splitIntoDigestibleChunks(scanner *bufio.Scanner) ([]string, error) {
+	parts := []string{}
+
 	scanner.Split(bufio.ScanRunes)
 
 	var buffer strings.Builder
@@ -181,7 +186,7 @@ func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
 		runeSize := len([]byte(runeText))
 
 		// If adding this rune exceeds the max chunk size, start a new chunk
-		if currentSize+runeSize > MaxFileChunkSize {
+		if currentSize+runeSize > MaxChunkSize {
 			parts = append(parts, buffer.String())
 			buffer.Reset()
 			currentSize = 0
@@ -196,9 +201,5 @@ func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
 		parts = append(parts, buffer.String())
 	}
 
-	if err := scanner.Err(); err != nil {
-		return parts, err
-	}
-
-	return parts, nil
+	return parts, scanner.Err()
 }
