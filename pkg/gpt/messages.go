@@ -89,16 +89,14 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 			// Now process the action
 			switch action {
 			case "file":
+				// TODO if file doesn't exist, display file picker?
 				messages = append(messages, ChatMessage{
 					From:     from,
 					Content:  fmt.Sprintf("Attached file: %s", remaining),
 					IsHidden: false,
 				})
 
-				chunks, err := splitFileIntoDigestibleChunks(remaining)
-				if err != nil {
-					return messages, err
-				}
+				chunks := splitFileIntoDigestibleChunks(remaining)
 
 				for idx, part := range chunks {
 					message := ChatMessage{
@@ -117,10 +115,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 					IsHidden: false,
 				})
 
-				chunks, err := splitExecOutputIntoDigestibleChunks(remaining)
-				if err != nil {
-					return messages, err
-				}
+				chunks := splitExecOutputIntoDigestibleChunks(remaining)
 
 				// We want to show the output of the command, so it's not hidden in the UI.
 				for idx, part := range chunks {
@@ -186,12 +181,12 @@ func trimMessage(msg string) string {
 // about in the line of battle, we send them as part of the conversation
 // message. For larger files, this requires splitting the file into smaller
 // chunks that can be sent as part of the conversation.
-func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
+func splitFileIntoDigestibleChunks(filePath string) []string {
 	file, err := os.Open(filePath)
 
 	// TODO display file picker instead?
 	if err != nil {
-		return []string{}, err
+		return []string{}
 	}
 
 	defer file.Close()
@@ -199,20 +194,20 @@ func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
 	return splitIntoDigestibleChunks(bufio.NewScanner(file))
 }
 
-func splitExecOutputIntoDigestibleChunks(command string) ([]string, error) {
+func splitExecOutputIntoDigestibleChunks(command string) []string {
 	cmd := exec.Command("sh", "-c", command)
 	output, err := cmd.CombinedOutput()
 
 	// An error here is not fatal. It's part of the output.
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to execute command: %v", err)
-		return []string{errorMsg}, nil
+		return []string{errorMsg}
 	}
 
 	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(string(output))))
 }
 
-func splitIntoDigestibleChunks(scanner *bufio.Scanner) ([]string, error) {
+func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
 	parts := []string{}
 
 	scanner.Split(bufio.ScanRunes)
@@ -240,5 +235,5 @@ func splitIntoDigestibleChunks(scanner *bufio.Scanner) ([]string, error) {
 		parts = append(parts, buffer.String())
 	}
 
-	return parts, scanner.Err()
+	return parts
 }
