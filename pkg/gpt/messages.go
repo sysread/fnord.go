@@ -57,7 +57,7 @@ func (m ChatMessage) Role() string {
 func (m ChatMessage) ChatCompletionMessage() openai.ChatCompletionMessage {
 	return openai.ChatCompletionMessage{
 		Role:    m.Role(),
-		Content: m.Content,
+		Content: trimMessage(m.Content),
 	}
 }
 
@@ -73,10 +73,8 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 		if isAction {
 			// Any built up text is a message. Add it and reset the current
 			// message buffer.
+			currentMessage = trimMessage(currentMessage)
 			if currentMessage != "" {
-				currentMessage = strings.TrimPrefix(currentMessage, "\n")
-				currentMessage = strings.TrimSuffix(currentMessage, "\n")
-
 				message := ChatMessage{
 					From:     from,
 					Content:  currentMessage,
@@ -123,10 +121,8 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 	}
 
 	// Add any remaining message content
+	currentMessage = trimMessage(currentMessage)
 	if currentMessage != "" {
-		currentMessage = strings.TrimPrefix(currentMessage, "\n")
-		currentMessage = strings.TrimSuffix(currentMessage, "\n")
-
 		message := ChatMessage{
 			From:     from,
 			Content:  currentMessage,
@@ -155,6 +151,12 @@ func getAction(line string) (bool, string, string) {
 	}
 
 	return false, "", line
+}
+
+func trimMessage(msg string) string {
+	msg = strings.TrimLeft(msg, " \r\n\t\f")
+	msg = strings.TrimRight(msg, " \r\n\t\f")
+	return msg
 }
 
 // Because OpenAI does not support all of the file types that we might care
