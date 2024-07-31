@@ -89,7 +89,8 @@ func (cv *chatView) newChatInput() *chatInput {
 			// Disable the chat input while the assistant is responding
 			chatInput.SetDisabled(true)
 
-			// TODO handle error
+			// TODO handle errors:
+			//   - if a file in the message(s) doesn't exist, display file picker
 			messages, _ := gpt.ParseMessage(gpt.You, chatInput.GetText())
 
 			// Clear the chat input after the user has sent the message

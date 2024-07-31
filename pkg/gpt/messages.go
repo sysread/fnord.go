@@ -31,6 +31,14 @@ type ChatMessage struct {
 
 type Conversation []ChatMessage
 
+type FileDoesNotExist struct {
+	FilePath string
+}
+
+func (e *FileDoesNotExist) Error() string {
+	return fmt.Sprintf("file does not exist: %s", e.FilePath)
+}
+
 func (c Conversation) ChatCompletionMessages() []openai.ChatCompletionMessage {
 	messages := []openai.ChatCompletionMessage{}
 
@@ -89,7 +97,10 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 			// Now process the action
 			switch action {
 			case "file":
-				// TODO if file doesn't exist, display file picker?
+				if _, err := os.Stat(remaining); os.IsNotExist(err) {
+					return messages, &FileDoesNotExist{FilePath: remaining}
+				}
+
 				messages = append(messages, ChatMessage{
 					From:     from,
 					Content:  fmt.Sprintf("Attached file: %s", remaining),
