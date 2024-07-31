@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -108,8 +109,30 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 
 					messages = append(messages, message)
 				}
+
 			case "exec":
-				// TODO
+				messages = append(messages, ChatMessage{
+					From:     from,
+					Content:  fmt.Sprintf("Executed command: %s", remaining),
+					IsHidden: false,
+				})
+
+				chunks, err := splitExecOutputIntoDigestibleChunks(remaining)
+				if err != nil {
+					return messages, err
+				}
+
+				// We want to show the output of the command, so it's not hidden in the UI.
+				for idx, part := range chunks {
+					message := ChatMessage{
+						From:     from,
+						Content:  fmt.Sprintf("Attached command output (%s) part %d:\n\n%s", remaining, idx, part),
+						IsHidden: false,
+					}
+
+					messages = append(messages, message)
+				}
+
 			default:
 				fmt.Printf("unknown action: %s", action)
 			}
@@ -166,6 +189,7 @@ func trimMessage(msg string) string {
 func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
 	file, err := os.Open(filePath)
 
+	// TODO display file picker instead?
 	if err != nil {
 		return []string{}, err
 	}
@@ -173,6 +197,19 @@ func splitFileIntoDigestibleChunks(filePath string) ([]string, error) {
 	defer file.Close()
 
 	return splitIntoDigestibleChunks(bufio.NewScanner(file))
+}
+
+func splitExecOutputIntoDigestibleChunks(command string) ([]string, error) {
+	cmd := exec.Command("sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+
+	// An error here is not fatal. It's part of the output.
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to execute command: %v", err)
+		return []string{errorMsg}, nil
+	}
+
+	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(string(output))))
 }
 
 func splitIntoDigestibleChunks(scanner *bufio.Scanner) ([]string, error) {
