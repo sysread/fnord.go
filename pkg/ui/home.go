@@ -13,10 +13,12 @@ func (ui *UI) newHomeView() tview.Primitive {
 			ui.Quit()
 		} else {
 			switch event.Rune() {
-			case 'c':
-				ui.OpenChat()
+			case 'q':
+				ui.Quit()
 			case '?':
 				ui.OpenHelp()
+			case 'c':
+				ui.OpenChat()
 			}
 		}
 
@@ -28,7 +30,7 @@ func (ui *UI) newHomeView() tview.Primitive {
 		keys: []keyBinding{
 			{"c", "chat"},
 			{"?", "help"},
-			{"esc", "quit"},
+			{"q, esc", "quit"},
 		},
 	})
 }

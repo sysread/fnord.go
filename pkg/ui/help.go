@@ -22,9 +22,13 @@ Key bindings:
 	help.SetDynamicColors(true)
 
 	help.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'q':
+		if event.Key() == tcell.KeyEscape {
 			ui.OpenHome()
+		} else {
+			switch event.Rune() {
+			case 'q':
+				ui.OpenHome()
+			}
 		}
 
 		return event
@@ -33,7 +37,7 @@ Key bindings:
 	return ui.newScreen(help, screenArgs{
 		title: "Help",
 		keys: []keyBinding{
-			{"q", "home"},
+			{"q, esc", "home"},
 		},
 	})
 }

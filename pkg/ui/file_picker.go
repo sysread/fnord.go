@@ -5,72 +5,109 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 type filePicker struct {
-	path  string
-	files []string
-
-	*tview.Flex
-
-	list  *tview.List
-	input *tview.InputField
+	*tview.Frame
+	filePickerInput *tview.InputField
 }
 
-func (ui *UI) newFilePicker(prompt string, path string) *filePicker {
-	fp := &filePicker{
-		path:  path,
-		files: listFiles(path),
+func (ui *UI) newFilePicker() *filePicker {
+	frame := tview.NewFrame(nil)
+	frame.SetBorder(true)
+	frame.SetBorderColor(tcell.ColorLightYellow)
+	frame.SetBorders(0, 0, 1, 1, 0, 0)
 
-		Flex: tview.NewFlex(),
-		list: tview.NewList(),
-		input: tview.NewInputField().
-			SetLabel(prompt + ": ").
-			SetFieldWidth(30),
+	return &filePicker{
+		Frame: frame,
 	}
-
-	fp.input.SetChangedFunc(fp.updateList)
-
-	fp.SetDirection(tview.FlexRow)
-	fp.AddItem(fp.input, 3, 1, true)
-	fp.AddItem(fp.list, 0, 1, false)
-
-	fp.updateList("")
-
-	return fp
 }
 
-func (fp *filePicker) updateList(text string) {
-	fp.list.Clear()
+func (fp *filePicker) GetInitialFocus() tview.Primitive {
+	return fp.filePickerInput
+}
 
-	for _, item := range fp.files {
-		if strings.Contains(strings.ToLower(item), strings.ToLower(text)) {
-			fp.list.AddItem(item, "", 0, func() {
-				fp.input.SetText(item)
-				fp.list.Clear()
-			})
-		}
-	}
+func (fp *filePicker) Setup(prompt string, path string, callback func(string)) {
+	fp.filePickerInput = newFilePickerInput(path, callback)
+
+	fp.Clear()
+	fp.AddText("File Picker", true, tview.AlignCenter, tcell.ColorLightYellow)
+	fp.AddText(prompt, true, tview.AlignCenter, tcell.ColorWhite)
+	fp.AddText("ESC cancels", false, tview.AlignCenter, tcell.ColorLightYellow)
+	fp.SetPrimitive(fp.filePickerInput)
+}
+
+func newFilePickerInput(path string, callback func(string)) *tview.InputField {
+	files := listFiles(path)
+
+	inputField := tview.NewInputField()
+	inputField.SetLabel("Select a file: ")
+	inputField.SetFieldWidth(30)
+
+	inputField.
+		SetDoneFunc(func(key tcell.Key) {
+			switch key {
+			case tcell.KeyEnter:
+				callback(inputField.GetText())
+			case tcell.KeyEscape:
+				callback("")
+			}
+		}).
+		SetAutocompletedFunc(func(text string, index, source int) bool {
+			if source != tview.AutocompletedNavigate {
+				inputField.SetText(text)
+				callback(text)
+			}
+
+			return source == tview.AutocompletedEnter || source == tview.AutocompletedClick
+		}).
+		SetAutocompleteFunc(func(currentText string) []string {
+			if len(currentText) == 0 {
+				return nil
+			}
+
+			entries := []string{}
+			for _, file := range files {
+				if strings.HasPrefix(file, ".") {
+					continue
+				}
+
+				if strings.Contains(strings.ToLower(file), strings.ToLower(currentText)) {
+					entries = append(entries, file)
+				}
+			}
+
+			return entries
+		})
+
+	return inputField
 }
 
 func listFiles(root string) []string {
-	var files []string
+	files := []string{}
 
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if !info.IsDir() {
-			relPath, err := filepath.Rel(root, path)
-
-			if err != nil {
-				return err
-			}
-
-			files = append(files, relPath)
+		if info.IsDir() {
+			return nil
 		}
+
+		relPath, err := filepath.Rel(root, path)
+
+		if strings.HasPrefix(relPath, ".") {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		files = append(files, relPath)
 
 		return nil
 	})

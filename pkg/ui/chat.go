@@ -2,14 +2,17 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
+	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/gpt"
 )
 
 type chatInput struct {
+	cv *chatView
 	*tview.TextArea
 }
 
@@ -26,8 +29,8 @@ type chatView struct {
 	userInput   *chatInput
 }
 
-func (ui *UI) newChatView() chatView {
-	cv := chatView{
+func (ui *UI) newChatView() *chatView {
+	cv := &chatView{
 		ui:           ui,
 		gptClient:    gpt.NewOpenAIClient(),
 		conversation: []gpt.ChatMessage{},
@@ -65,15 +68,15 @@ func (ui *UI) newChatView() chatView {
 	return cv
 }
 
-// Focuses the chat input when the chat view is opened
-func (cv *chatView) SetFocus(ui *UI) {
-	ui.app.SetFocus(cv.userInput)
+func (cv *chatView) GetInitialFocus() tview.Primitive {
+	return cv.userInput
 }
 
 // Builds the chatInput component, which is a text area that captures user
 // input and sends it to the assistant when the user presses Ctrl+Space.
 func (cv *chatView) newChatInput() *chatInput {
 	chatInput := &chatInput{
+		cv:       cv,
 		TextArea: tview.NewTextArea(),
 	}
 
@@ -86,52 +89,7 @@ func (cv *chatView) newChatInput() *chatInput {
 		}
 
 		if event.Key() == tcell.KeyCtrlSpace {
-			// Disable the chat input while the assistant is responding
-			chatInput.SetDisabled(true)
-
-			// TODO handle errors:
-			//   - if a file in the message(s) doesn't exist, display file picker
-			messages, _ := gpt.ParseMessage(gpt.You, chatInput.GetText())
-
-			// Clear the chat input after the user has sent the message
-			chatInput.SetText("", false)
-
-			// Create a channel to signal when the assistant has finished
-			done := make(chan struct{})
-
-			// Send the user message to the assistant and get the response
-			go func() {
-				for _, message := range messages {
-					// Add the user message to the chat view and conversation.
-					cv.ui.app.QueueUpdateDraw(func() {
-						cv.addMessage(message)
-					})
-				}
-
-				// Get the assistant's response
-				response, _ := cv.gptClient.GetCompletion(cv.conversation)
-				responseMessage := gpt.ChatMessage{
-					From:    gpt.Assistant,
-					Content: response,
-				}
-
-				// Add the assistant's response to the chat view and
-				// conversation.
-				cv.ui.app.QueueUpdateDraw(func() {
-					cv.addMessage(responseMessage)
-				})
-
-				done <- struct{}{}
-			}()
-
-			// Re-enable the chat input when the assistant has finished
-			go func() {
-				<-done
-
-				cv.ui.app.QueueUpdateDraw(func() {
-					chatInput.SetDisabled(false)
-				})
-			}()
+			go chatInput.onSubmit()
 
 			// Return nil to indicate the event has been handled
 			return nil
@@ -141,6 +99,85 @@ func (cv *chatView) newChatInput() *chatInput {
 	})
 
 	return chatInput
+}
+
+func (ci *chatInput) onSubmit() {
+	// Disable the chat input while the assistant is responding
+	ci.SetDisabled(true)
+
+	messages := []gpt.ChatMessage{}
+	messageText := ci.GetText()
+	for {
+		parsed, err := gpt.ParseMessage(gpt.You, messageText)
+		debug.Log("parsed: %v, err: %v", parsed, err)
+
+		if err == nil {
+			messages = parsed
+			break
+		}
+
+		if fileDoesNotExist, ok := err.(*gpt.FileDoesNotExist); ok {
+			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", fileDoesNotExist.FilePath)
+
+			done := make(chan bool)
+
+			ci.cv.ui.app.QueueUpdateDraw(func() {
+				ci.cv.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
+					debug.Log("file picker callback: %s", replacementFilePath)
+					messageText = strings.Replace(messageText, "\\f "+fileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
+					ci.cv.ui.OpenChat()
+					done <- true
+				})
+			})
+
+			<-done
+		}
+	}
+
+	// Clear the chat input after the user has sent the message
+	ci.SetText("", false)
+
+	if len(messages) == 0 {
+		ci.SetDisabled(false)
+		return
+	}
+
+	// Create a channel to signal when the assistant has finished
+	done := make(chan bool)
+
+	// Send the user message to the assistant and get the response
+	go func() {
+		for _, message := range messages {
+			// Add the user message to the chat view and conversation.
+			ci.cv.ui.app.QueueUpdateDraw(func() {
+				ci.cv.addMessage(message)
+			})
+		}
+
+		// Get the assistant's response
+		response, _ := ci.cv.gptClient.GetCompletion(ci.cv.conversation)
+		responseMessage := gpt.ChatMessage{
+			From:    gpt.Assistant,
+			Content: response,
+		}
+
+		// Add the assistant's response to the chat view and
+		// conversation.
+		ci.cv.ui.app.QueueUpdateDraw(func() {
+			ci.cv.addMessage(responseMessage)
+		})
+
+		done <- true
+	}()
+
+	// Re-enable the chat input when the assistant has finished
+	go func() {
+		<-done
+
+		ci.cv.ui.app.QueueUpdateDraw(func() {
+			ci.SetDisabled(false)
+		})
+	}()
 }
 
 // Adds a message to the chat view. This is the function that is called when a

@@ -5,8 +5,14 @@ import (
 )
 
 type UI struct {
-	app         *tview.Application
-	CurrentView tview.Primitive
+	app   *tview.Application
+	pages *tview.Pages
+
+	// Pages
+	home       tview.Primitive
+	help       tview.Primitive
+	chat       *chatView
+	filePicker *filePicker
 }
 
 func New() *UI {
@@ -14,14 +20,28 @@ func New() *UI {
 	app.EnableMouse(true)
 
 	ui := &UI{
-		app: app,
+		app:   app,
+		pages: tview.NewPages(),
 	}
+
+	ui.home = ui.newHomeView()
+	ui.help = ui.newHelpView()
+	ui.chat = ui.newChatView()
+	ui.filePicker = ui.newFilePicker()
+
+	ui.pages.AddPage("home", ui.home, true, true)
+	ui.pages.AddPage("help", ui.help, true, true)
+	ui.pages.AddPage("chat", ui.chat, true, true)
+	ui.pages.AddPage("filePicker", ui.filePicker, true, true)
+
+	ui.app.SetRoot(ui.pages, true).SetFocus(ui.pages)
 
 	return ui
 }
 
 func (ui *UI) Run() {
 	ui.OpenHome()
+	//ui.OpenChat()
 
 	if err := ui.app.Run(); err != nil {
 		panic(err)
@@ -32,23 +52,30 @@ func (ui *UI) Quit() {
 	ui.app.Stop()
 }
 
-func (ui *UI) Open(view tview.Primitive, fullScreen bool) {
-	ui.CurrentView = view
-	ui.app.SetRoot(view, fullScreen).SetFocus(view)
+func (ui *UI) CurrentPage() string {
+	page, _ := ui.pages.GetFrontPage()
+	return page
+}
+
+func (ui *UI) Open(pageName string) {
+	ui.pages.SwitchToPage(pageName)
 }
 
 func (ui *UI) OpenHome() {
-	home := ui.newHomeView()
-	ui.Open(home, true)
+	ui.Open("home")
 }
 
 func (ui *UI) OpenHelp() {
-	helpView := ui.newHelpView()
-	ui.Open(helpView, true)
+	ui.Open("help")
 }
 
 func (ui *UI) OpenChat() {
-	chatView := ui.newChatView()
-	ui.Open(chatView, true)
-	chatView.SetFocus(ui)
+	ui.Open("chat")
+	ui.app.SetFocus(ui.chat.GetInitialFocus())
+}
+
+func (ui *UI) OpenFilePicker(prompt string, path string, callback func(string)) {
+	ui.Open("filePicker")
+	ui.filePicker.Setup(prompt, path, callback)
+	ui.app.SetFocus(ui.filePicker.GetInitialFocus())
 }
