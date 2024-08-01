@@ -7,7 +7,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/gpt"
 )
 
@@ -109,7 +108,6 @@ func (ci *chatInput) onSubmit() {
 	messageText := ci.GetText()
 	for {
 		parsed, err := gpt.ParseMessage(gpt.You, messageText)
-		debug.Log("parsed: %v, err: %v", parsed, err)
 
 		if err == nil {
 			messages = parsed
@@ -123,7 +121,6 @@ func (ci *chatInput) onSubmit() {
 
 			ci.cv.ui.app.QueueUpdateDraw(func() {
 				ci.cv.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
-					debug.Log("file picker callback: %s", replacementFilePath)
 					messageText = strings.Replace(messageText, "\\f "+fileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
 					ci.cv.ui.OpenChat()
 					done <- true
