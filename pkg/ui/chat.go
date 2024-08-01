@@ -39,8 +39,9 @@ func (ui *UI) newChatView() *chatView {
 
 	cv.messageList = tview.NewTextView().
 		SetDynamicColors(true).
+		SetScrollable(true).
 		SetRegions(true).
-		SetScrollable(true)
+		SetWordWrap(true)
 
 	cv.container = tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -51,14 +52,28 @@ func (ui *UI) newChatView() *chatView {
 		title: "Chat",
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
-			{"esc", "home"},
+			{"shift-tab", "switches focus"},
+			{"esc, q", "home"},
 		},
 	})
 
 	cv.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'q':
+			ui.OpenHome()
+			return nil
+		}
+
 		switch event.Key() {
 		case tcell.KeyEscape:
 			ui.OpenHome()
+			return nil
+		case tcell.KeyBacktab:
+			if cv.ui.app.GetFocus() == cv.userInput {
+				cv.ui.app.SetFocus(cv.messageList)
+			} else {
+				cv.ui.app.SetFocus(cv.userInput)
+			}
 		}
 
 		return event
