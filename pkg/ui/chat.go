@@ -119,8 +119,9 @@ func (ci *chatInput) onSubmit() {
 	// Disable the chat input while the assistant is responding
 	ci.SetDisabled(true)
 
-	messages := []gpt.ChatMessage{}
+	var messages []gpt.ChatMessage
 	messageText := ci.GetText()
+
 	for {
 		parsed, err := gpt.ParseMessage(gpt.You, messageText)
 
