@@ -30,6 +30,10 @@ github.com/sashabaranov/go-openai v1.27.1 h1:7Nx6db5NXbcoutNmAUQulEQZEpHG/Skzfex
 github.com/sashabaranov/go-openai v1.27.1/go.mod h1:lj5b/K+zjTSFxVLijLSTDZuP7adOgerWeFyZLUhAKRg=
 github.com/sysread/textsel v0.1.2 h1:GPR7UHV1PRcrFb62K/BOMj8VRfxvP7gm1WyGFoOO3Ks=
 github.com/sysread/textsel v0.1.2/go.mod h1:pehZMY0VgJ0Fy2y+Mml2uETIfqThNgezfPV7AMYy7/w=
+github.com/sysread/textsel v0.1.3 h1:BUvO2XIIoo2+XuW8Kgp2WGe7eoDLRYtiyhCG266DPz8=
+github.com/sysread/textsel v0.1.3/go.mod h1:pehZMY0VgJ0Fy2y+Mml2uETIfqThNgezfPV7AMYy7/w=
+github.com/sysread/textsel v0.1.4 h1:Ohe76adRCMeyY7SLle5uaMuL967U5H2y/WucaoR+++4=
+github.com/sysread/textsel v0.1.4/go.mod h1:pehZMY0VgJ0Fy2y+Mml2uETIfqThNgezfPV7AMYy7/w=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sysread/textsel"
 
 	"github.com/sysread/fnord/pkg/gpt"
 )
@@ -24,7 +25,7 @@ type chatView struct {
 
 	*tview.Frame
 	container   *tview.Flex
-	messageList *tview.TextView
+	messageList *textsel.TextSel
 	userInput   *chatInput
 }
 
@@ -37,10 +38,10 @@ func (ui *UI) newChatView() *chatView {
 
 	cv.userInput = cv.newChatInput()
 
-	cv.messageList = tview.NewTextView().
-		SetDynamicColors(true).
+	cv.messageList = textsel.NewTextSel()
+
+	cv.messageList.
 		SetScrollable(true).
-		SetRegions(true).
 		SetWordWrap(true)
 
 	cv.container = tview.NewFlex().
@@ -53,6 +54,7 @@ func (ui *UI) newChatView() *chatView {
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},
+			{"space, enter", "select, copy (in msgs)"},
 			{"esc, q", "home"},
 		},
 	})
@@ -209,12 +211,15 @@ func (cv *chatView) addMessage(msg gpt.ChatMessage) {
 	}
 
 	// Create a new message view and add it to the message list
-	color := "blue"
+	color := "[blue::b]"
 	if msg.From != gpt.You {
-		color = "green"
+		color = "[green::b]"
 	}
 
-	fmt.Fprintf(cv.messageList, "[%s]%s:\n\n[white]%s\n\n", color, msg.From, msg.Content)
+	// Printing to TextSel is not yet supported
+	messages := cv.messageList.GetText(false)
+	messages += fmt.Sprintf("%s%s:[-:-:-]\n\n%s\n\n", color, msg.From, msg.Content)
+	cv.messageList.SetText(messages)
 
 	// Scroll to the last message when a new message is added
 	cv.messageList.ScrollToEnd()
