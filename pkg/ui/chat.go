@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
@@ -43,6 +44,10 @@ func (ui *UI) newChatView() *chatView {
 	cv.messageList.
 		SetScrollable(true).
 		SetWordWrap(true)
+
+	cv.messageList.SetSelectFunc(func(s string) {
+		clipboard.WriteAll(s)
+	})
 
 	cv.container = tview.NewFlex().
 		SetDirection(tview.FlexRow).
