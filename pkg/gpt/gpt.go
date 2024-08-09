@@ -2,7 +2,9 @@ package gpt
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -33,4 +35,50 @@ func (c *OpenAIClient) GetCompletion(conversation Conversation) (string, error) 
 	}
 
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
+}
+
+func (c *OpenAIClient) GetCompletionStream(conversation Conversation) chan string {
+	out := make(chan string)
+
+	go func() {
+		stream, err := c.client.CreateChatCompletionStream(
+			context.Background(),
+			openai.ChatCompletionRequest{
+				Model:    openai.GPT3Dot5Turbo,
+				Messages: conversation.ChatCompletionMessages(),
+				Stream:   true,
+			},
+		)
+
+		if err != nil {
+			fmt.Printf("Failed to get completion stream: %v\n", err)
+			close(out)
+			return
+		}
+
+		defer stream.Close()
+		defer close(out)
+
+		for {
+			var response openai.ChatCompletionStreamResponse
+
+			response, err = stream.Recv()
+
+			// response stream complete
+			if errors.Is(err, io.EOF) {
+				return
+			}
+
+			// actual error
+			if err != nil {
+				fmt.Printf("Stream error: %v\n", err)
+				return
+			}
+
+			// Send the content to the channel
+			out <- response.Choices[0].Delta.Content
+		}
+	}()
+
+	return out
 }

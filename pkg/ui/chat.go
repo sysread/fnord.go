@@ -129,6 +129,7 @@ func (ci *chatInput) onSubmit() {
 	var messages []gpt.ChatMessage
 	messageText := ci.GetText()
 
+	// Parse the user message
 	for {
 		parsed, err := gpt.ParseMessage(gpt.You, messageText)
 
@@ -165,27 +166,39 @@ func (ci *chatInput) onSubmit() {
 	// Create a channel to signal when the assistant has finished
 	done := make(chan bool)
 
-	// Send the user message to the assistant and get the response
+	// Add the parsed user messages to the chat view and conversation.
+	for _, message := range messages {
+		ci.cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + message.Content + "\n\n")
+		ci.cv.conversation = append(ci.cv.conversation, message)
+		ci.cv.messageList.ScrollToEnd()
+		ci.cv.messageList.MoveToLastLine()
+	}
+
+	// Get the assistant's response
+	responseChan := ci.cv.gptClient.GetCompletionStream(ci.cv.conversation)
+
+	response := gpt.ChatMessage{
+		From:    gpt.Assistant,
+		Content: "",
+	}
+
+	// Append the response to the chat messages view
 	go func() {
-		for _, message := range messages {
-			// Add the user message to the chat view and conversation.
-			ci.cv.ui.app.QueueUpdateDraw(func() {
-				ci.cv.addMessage(message)
-			})
+		ci.cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+
+		for chunk := range responseChan {
+			// Add the assistant's response to the chat view
+			ci.cv.queueAppendText(chunk)
+
+			// Update the ChatMessage that will be part of the conversation
+			response.Content += chunk
 		}
 
-		// Get the assistant's response
-		response, _ := ci.cv.gptClient.GetCompletion(ci.cv.conversation)
-		responseMessage := gpt.ChatMessage{
-			From:    gpt.Assistant,
-			Content: response,
-		}
+		ci.cv.queueAppendText("\n\n")
+		ci.cv.messageList.ScrollToEnd()
+		ci.cv.messageList.MoveToLastLine()
 
-		// Add the assistant's response to the chat view and
-		// conversation.
-		ci.cv.ui.app.QueueUpdateDraw(func() {
-			ci.cv.addMessage(responseMessage)
-		})
+		ci.cv.conversation = append(ci.cv.conversation, response)
 
 		done <- true
 	}()
@@ -200,32 +213,9 @@ func (ci *chatInput) onSubmit() {
 	}()
 }
 
-// Adds a message to the chat view. This is the function that is called when a
-// new message is received from the chat input or a new response is generated
-// by the assistant.
-func (cv *chatView) addMessage(msg gpt.ChatMessage) {
-	// Append the message to the conversation
-	cv.conversation = append(cv.conversation, msg)
-
-	// Action messages may include messages that are not to be displayed, like
-	// the contents of a file chunk. In this case, we don't want to add the
-	// message to the visible message list. However, we still want to add it to
-	// the conversation.
-	if msg.IsHidden {
-		return
-	}
-
-	// Create a new message view and add it to the message list
-	color := "[blue::b]"
-	if msg.From != gpt.You {
-		color = "[green::b]"
-	}
-
-	// Printing to TextSel is not yet supported
-	messages := cv.messageList.GetText(false)
-	messages += fmt.Sprintf("%s%s:[-:-:-]\n\n%s\n\n", color, msg.From, msg.Content)
-	cv.messageList.SetText(messages)
-
-	// Scroll to the last message when a new message is added
-	cv.messageList.ScrollToEnd()
+// Appends text to the chat view.
+func (cv *chatView) queueAppendText(text string) {
+	cv.ui.app.QueueUpdateDraw(func() {
+		cv.messageList.SetText(cv.messageList.GetText(false) + text)
+	})
 }
