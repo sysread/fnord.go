@@ -7,7 +7,7 @@ require (
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/rivo/tview v0.0.0-20240807205129-e4c497cc59ed
 	github.com/sashabaranov/go-openai v1.28.1
-	github.com/sysread/textsel v0.1.7
+	github.com/sysread/textsel v0.1.8
 )
 
 require (
