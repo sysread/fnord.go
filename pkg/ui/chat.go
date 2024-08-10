@@ -78,8 +78,11 @@ func (ui *UI) newChatView() *chatView {
 		case tcell.KeyBacktab:
 			if cv.ui.app.GetFocus() == cv.userInput {
 				cv.ui.app.SetFocus(cv.messageList)
+				cv.messageList.MoveToLastLine()
 			} else {
 				cv.ui.app.SetFocus(cv.userInput)
+				cv.messageList.ScrollToEnd()
+				cv.messageList.ResetCursor()
 			}
 		}
 
@@ -196,7 +199,6 @@ func (ci *chatInput) onSubmit() {
 
 		ci.cv.queueAppendText("\n\n")
 		ci.cv.messageList.ScrollToEnd()
-		ci.cv.messageList.MoveToLastLine()
 
 		ci.cv.conversation = append(ci.cv.conversation, response)
 
