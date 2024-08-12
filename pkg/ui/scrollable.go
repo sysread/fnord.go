@@ -3,36 +3,58 @@ package ui
 import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sysread/fnord/pkg/debug"
 )
 
 type Scrollable struct {
 	*tview.Box
 
 	app          *tview.Application
-	children     []tview.Primitive
+	children     []*tview.Frame
 	renderHeight int
 	scrollOffset int
 	autoscroll   bool
+
+	selectedChildIndex int
+	focusedChildIndex  int
 }
 
 // NewScrollable creates a new Scrollable widget.
 func NewScrollable(app *tview.Application) *Scrollable {
 	return &Scrollable{
-		Box:          tview.NewBox(),
-		app:          app,
-		children:     []tview.Primitive{},
-		renderHeight: 0,
-		scrollOffset: 0,
-		autoscroll:   false,
+		Box:                tview.NewBox(),
+		app:                app,
+		children:           []*tview.Frame{},
+		renderHeight:       0,
+		scrollOffset:       0,
+		autoscroll:         false,
+		selectedChildIndex: -1,
+		focusedChildIndex:  -1,
 	}
+}
+
+func (s *Scrollable) ReFocus() {
+	s.app.SetFocus(s)
+	s.focusedChildIndex = -1
+}
+
+// getPrimitiveHeight calculates the height of a primitive based on its content.
+func getPrimitiveHeight(p tview.Primitive) int {
+	_, _, _, height := p.GetRect()
+	return height
 }
 
 // AddChild adds a new child widget to the scrollable area.
 func (s *Scrollable) AddChild(child tview.Primitive) {
-	s.children = append(s.children, child)
+	frame := tview.NewFrame(child).SetBorders(0, 0, 0, 0, 1, 1)
+	s.children = append(s.children, frame)
 
 	if s.autoscroll {
-		s.SetScrollOffset(s.scrollOffset + getPrimitiveHeight(child))
+		s.SetScrollOffset(s.scrollOffset + getPrimitiveHeight(frame))
+		s.selectedChildIndex = len(s.children) - 1
+		s.scrollToChild()
+	} else {
+		s.NextChild()
 	}
 }
 
@@ -44,42 +66,41 @@ func (s *Scrollable) SetAutoscroll(isEnabled bool) *Scrollable {
 
 // Draw renders the Scrollable and its children.
 func (s *Scrollable) Draw(screen tcell.Screen) {
+	debug.Log("Scrollable drawn")
 	s.DrawForSubclass(screen, s)
 
-	// The scroll offset should be clamped to the maximum scroll offset. This
-	// calculation can be incorrect when calculated before the widget is
-	// initially rendered, so we recalculate it here to ensure it is properly
-	// clamped.
 	s.SetScrollOffset(s.scrollOffset)
 
-	// Get available drawing area
 	x, y, width, height := s.GetInnerRect()
-
-	// Update the scrollable's render height
 	s.renderHeight = height
 
-	// Draw each child widget, adjusting for the scrollOffset
 	currentY := y - s.scrollOffset
 
-	for _, child := range s.children {
+	for i, child := range s.children {
 		childHeight := getPrimitiveHeight(child)
 
 		if currentY+childHeight > y && currentY < y+height {
+			switch i {
+			case s.focusedChildIndex:
+				child.SetBorder(true).SetBorderColor(tcell.ColorGreen)
+			case s.selectedChildIndex:
+				child.SetBorder(true).SetBorderColor(tview.Styles.PrimaryTextColor)
+			default:
+				child.SetBorder(true).SetBorderColor(tview.Styles.PrimitiveBackgroundColor)
+			}
+
 			child.SetRect(x, currentY, width, childHeight)
 			child.Draw(screen)
 		}
 
 		currentY += childHeight
 	}
-
-	// The screen dimensions may have changed since the last render, so we
-	// need to recalculate our render height.
-	s.renderHeight = height
 }
 
 // InputHandler handles scrolling input.
 func (s *Scrollable) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+		debug.Log("Scrollable received event: %v", event)
 		switch event.Key() {
 		case tcell.KeyUp:
 			s.DecScrollOffset()
@@ -93,6 +114,12 @@ func (s *Scrollable) InputHandler() func(*tcell.EventKey, func(tview.Primitive))
 			s.ScrollToBeginning()
 		case tcell.KeyEnd:
 			s.ScrollToEnd()
+		case tcell.KeyTab:
+			s.NextChild()
+		case tcell.KeyBacktab:
+			s.PreviousChild()
+		case tcell.KeyEnter:
+			s.FocusSelectedChild(setFocus)
 		default:
 			switch event.Rune() {
 			case 'j':
@@ -164,8 +191,48 @@ func (s *Scrollable) getMaxScrollOffset() int {
 	return s.getContentHeight() - s.renderHeight
 }
 
-// getPrimitiveHeight calculates the height of a primitive based on its content.
-func getPrimitiveHeight(p tview.Primitive) int {
-	_, _, _, height := p.GetRect()
-	return height
+func (s *Scrollable) scrollToChild() {
+	if len(s.children) == 0 {
+		return
+	}
+
+	// Calculate the position of the selected child
+	y := 0
+	for i, child := range s.children {
+		childHeight := getPrimitiveHeight(child)
+
+		if i == s.selectedChildIndex {
+			break
+		}
+
+		y += childHeight
+	}
+
+	// Calculate the visible area
+	_, _, _, height := s.GetInnerRect()
+
+	// Adjust scroll offset if the selected child is out of view
+	if y < s.scrollOffset {
+		s.SetScrollOffset(y)
+	} else if y+getPrimitiveHeight(s.children[s.selectedChildIndex]) > s.scrollOffset+height {
+		s.SetScrollOffset(y + getPrimitiveHeight(s.children[s.selectedChildIndex]) - height)
+	}
+}
+
+func (s *Scrollable) NextChild() {
+	s.selectedChildIndex = (s.selectedChildIndex + 1) % len(s.children)
+	s.scrollToChild()
+}
+
+func (s *Scrollable) PreviousChild() {
+	s.selectedChildIndex = (s.selectedChildIndex - 1 + len(s.children)) % len(s.children)
+	s.scrollToChild()
+}
+
+func (s *Scrollable) FocusSelectedChild(setFocus func(p tview.Primitive)) {
+	if len(s.children) > 0 {
+		s.focusedChildIndex = s.selectedChildIndex
+		frame := s.children[s.selectedChildIndex]
+		setFocus(frame)
+	}
 }
