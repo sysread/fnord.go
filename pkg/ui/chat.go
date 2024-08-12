@@ -13,7 +13,7 @@ import (
 )
 
 type chatInput struct {
-	cv *chatView
+	chatView *chatView
 	*tview.TextArea
 }
 
@@ -46,7 +46,7 @@ func (ui *UI) newChatView() *chatView {
 		SetWordWrap(true)
 
 	cv.messageList.SetSelectFunc(func(s string) {
-		clipboard.WriteAll(s)
+		clipboard.WriteAll(strings.TrimSpace(s))
 	})
 
 	cv.container = tview.NewFlex().
@@ -100,7 +100,7 @@ func (cv *chatView) GetInitialFocus() tview.Primitive {
 // input and sends it to the assistant when the user presses Ctrl+Space.
 func (cv *chatView) newChatInput() *chatInput {
 	chatInput := &chatInput{
-		cv:       cv,
+		chatView: cv,
 		TextArea: tview.NewTextArea(),
 	}
 
@@ -146,10 +146,10 @@ func (ci *chatInput) onSubmit() {
 
 			done := make(chan bool)
 
-			ci.cv.ui.app.QueueUpdateDraw(func() {
-				ci.cv.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
+			ci.chatView.ui.app.QueueUpdateDraw(func() {
+				ci.chatView.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
 					messageText = strings.Replace(messageText, "\\f "+fileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
-					ci.cv.ui.OpenChat()
+					ci.chatView.ui.OpenChat()
 					done <- true
 				})
 			})
@@ -171,14 +171,14 @@ func (ci *chatInput) onSubmit() {
 
 	// Add the parsed user messages to the chat view and conversation.
 	for _, message := range messages {
-		ci.cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + message.Content + "\n\n")
-		ci.cv.conversation = append(ci.cv.conversation, message)
-		ci.cv.messageList.ScrollToEnd()
-		ci.cv.messageList.MoveToLastLine()
+		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + message.Content + "\n\n")
+		ci.chatView.conversation = append(ci.chatView.conversation, message)
+		ci.chatView.messageList.ScrollToEnd()
+		ci.chatView.messageList.MoveToLastLine()
 	}
 
 	// Get the assistant's response
-	responseChan := ci.cv.gptClient.GetCompletionStream(ci.cv.conversation)
+	responseChan := ci.chatView.gptClient.GetCompletionStream(ci.chatView.conversation)
 
 	response := gpt.ChatMessage{
 		From:    gpt.Assistant,
@@ -187,20 +187,20 @@ func (ci *chatInput) onSubmit() {
 
 	// Append the response to the chat messages view
 	go func() {
-		ci.cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+		ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
 
 		for chunk := range responseChan {
 			// Add the assistant's response to the chat view
-			ci.cv.queueAppendText(chunk)
+			ci.chatView.queueAppendText(chunk)
 
 			// Update the ChatMessage that will be part of the conversation
 			response.Content += chunk
 		}
 
-		ci.cv.queueAppendText("\n\n")
-		ci.cv.messageList.ScrollToEnd()
+		ci.chatView.queueAppendText("\n\n")
+		ci.chatView.messageList.ScrollToEnd()
 
-		ci.cv.conversation = append(ci.cv.conversation, response)
+		ci.chatView.conversation = append(ci.chatView.conversation, response)
 
 		done <- true
 	}()
@@ -209,7 +209,7 @@ func (ci *chatInput) onSubmit() {
 	go func() {
 		<-done
 
-		ci.cv.ui.app.QueueUpdateDraw(func() {
+		ci.chatView.ui.app.QueueUpdateDraw(func() {
 			ci.SetDisabled(false)
 		})
 	}()
