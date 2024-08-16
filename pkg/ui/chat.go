@@ -60,17 +60,11 @@ func (ui *UI) newChatView() *chatView {
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},
 			{"space, enter", "select, copy (in msgs)"},
-			{"esc, q", "home"},
+			{"esc", "home"},
 		},
 	})
 
 	cv.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'q':
-			ui.OpenHome()
-			return nil
-		}
-
 		switch event.Key() {
 		case tcell.KeyEscape:
 			ui.OpenHome()
