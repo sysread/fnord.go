@@ -10,8 +10,6 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-type Sender string
-
 const (
 	You       Sender = "You"
 	Assistant Sender = "Assistant"
@@ -22,6 +20,8 @@ const (
 	// token limit.
 	MaxChunkSize = 30_000
 )
+
+type Sender string
 
 type ChatMessage struct {
 	From     Sender `json:"from"`
