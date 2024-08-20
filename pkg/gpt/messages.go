@@ -24,9 +24,9 @@ const (
 )
 
 type ChatMessage struct {
-	From     Sender
-	IsHidden bool
-	Content  string
+	From     Sender `json:"from"`
+	IsHidden bool   `json:"is_hidden"`
+	Content  string `json:"content"`
 }
 
 type Conversation []ChatMessage
@@ -47,6 +47,16 @@ func (c Conversation) ChatCompletionMessages() []openai.ChatCompletionMessage {
 	}
 
 	return messages
+}
+
+func (c Conversation) ChatTranscript() string {
+	transcript := ""
+
+	for _, message := range c {
+		transcript += fmt.Sprintf("%s: %s\n\n", message.From, message.Content)
+	}
+
+	return transcript
 }
 
 func (c *Conversation) AddMessage(message ChatMessage) {

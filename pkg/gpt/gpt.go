@@ -10,6 +10,19 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
+const (
+	completionModel string                = openai.GPT4o
+	summaryModel    string                = openai.GPT4oMini
+	embeddingsModel openai.EmbeddingModel = openai.LargeEmbedding3
+)
+
+type Client interface {
+	GetSummary(conversation Conversation) (string, error)
+	GetCompletion(conversation Conversation) (string, error)
+	GetCompletionStream(conversation Conversation) chan string
+	GetEmbedding(text string) ([]float32, error)
+}
+
 type OpenAIClient struct {
 	client *openai.Client
 }
@@ -20,11 +33,34 @@ func NewOpenAIClient() *OpenAIClient {
 	return &OpenAIClient{client: client}
 }
 
+func (c *OpenAIClient) GetSummary(conversation Conversation) (string, error) {
+	systemPrompt := "Your job is to summarize a conversation. Respond ONLY with a summary of the discussion, followed by a list of ALL facts identified in the conversation."
+	userPrompt := conversation.ChatTranscript()
+
+	res, err := c.client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model:    summaryModel,
+			Messages: []openai.ChatCompletionMessage{
+				{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+				{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+			},
+		},
+	)
+
+	if err != nil {
+		errorMessage := fmt.Sprintf("Failed to get completion: %v", err)
+		return errorMessage, err
+	}
+
+	return fmt.Sprintf(res.Choices[0].Message.Content), nil
+}
+
 func (c *OpenAIClient) GetCompletion(conversation Conversation) (string, error) {
 	res, err := c.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model:    openai.GPT4o,
+			Model:    completionModel,
 			Messages: conversation.ChatCompletionMessages(),
 		},
 	)
@@ -81,4 +117,20 @@ func (c *OpenAIClient) GetCompletionStream(conversation Conversation) chan strin
 	}()
 
 	return out
+}
+
+func (c *OpenAIClient) GetEmbedding(text string) ([]float32, error) {
+	request := openai.EmbeddingRequest{
+		Input:          text,
+		Model:          embeddingsModel,
+		Dimensions:     1536,
+		EncodingFormat: openai.EmbeddingEncodingFormatFloat,
+	}
+
+	response, err := c.client.CreateEmbeddings(context.Background(), request)
+	if err != nil {
+		return nil, fmt.Errorf("error generating embeddings: %w", err)
+	}
+
+	return response.Data[0].Embedding, nil
 }
