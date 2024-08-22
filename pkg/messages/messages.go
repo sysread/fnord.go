@@ -1,12 +1,14 @@
 package messages
 
 import (
+	"bytes"
 	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/rivo/tview"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -37,6 +39,14 @@ const (
 
 func (e *FileDoesNotExist) Error() string {
 	return fmt.Sprintf("file does not exist: %s", e.FilePath)
+}
+
+func NewMessage(from Sender, content string) ChatMessage {
+	return ChatMessage{
+		From:     from,
+		Content:  content,
+		IsHidden: false,
+	}
 }
 
 func (c Conversation) ChatCompletionMessages() []openai.ChatCompletionMessage {
@@ -224,7 +234,10 @@ func splitExecOutputIntoDigestibleChunks(command string) []string {
 		return []string{errorMsg}
 	}
 
-	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(string(output))))
+	// Convert any ANSI escape codes to tview tags
+	outputStr := tview.TranslateANSI(string(output))
+
+	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(outputStr)))
 }
 
 func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
@@ -256,4 +269,18 @@ func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
 	}
 
 	return parts
+}
+
+// ConvertANSIToTviewTags takes a byte slice of ANSI-encoded text and returns a plain string.
+func convertANSIToTviewTags(ansiText []byte) (string, error) {
+	var buffer bytes.Buffer
+
+	// Use tview.ANSIWriter to write to the buffer
+	writer := tview.ANSIWriter(&buffer)
+	_, err := writer.Write(ansiText)
+	if err != nil {
+		return "", err
+	}
+
+	return buffer.String(), nil
 }

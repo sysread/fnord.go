@@ -3,12 +3,14 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
 
+	"github.com/sysread/fnord/pkg/chat"
 	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
 )
@@ -23,7 +25,7 @@ type chatView struct {
 
 	gptClient *gpt.OpenAIClient
 
-	conversation messages.Conversation
+	chat *chat.Chat
 
 	*tview.Frame
 	container   *tview.Flex
@@ -33,9 +35,9 @@ type chatView struct {
 
 func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
-		ui:           ui,
-		gptClient:    gpt.NewOpenAIClient(),
-		conversation: []messages.ChatMessage{},
+		ui:        ui,
+		gptClient: gpt.NewOpenAIClient(),
+		chat:      chat.NewChat(),
 	}
 
 	cv.userInput = cv.newChatInput()
@@ -161,53 +163,29 @@ func (ci *chatInput) onSubmit() {
 		return
 	}
 
-	// Create a channel to signal when the assistant has finished
-	done := make(chan bool)
-
 	// Add the parsed user messages to the chat view and conversation.
 	for _, message := range msgs {
-		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + message.Content + "\n\n")
-		ci.chatView.conversation = append(ci.chatView.conversation, message)
+		content := asciiDamnit(message.Content)
+		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n\n")
+		ci.chatView.chat.AddMessage(message)
 		ci.chatView.messageList.ScrollToEnd()
 		ci.chatView.messageList.MoveToLastLine()
 	}
 
 	// Get the assistant's response
-	responseChan := ci.chatView.gptClient.GetCompletionStream(ci.chatView.conversation)
+	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+	ci.chatView.chat.RequestResponse(func(chunk string) {
+		// Append the assistant's response to the chat view
+		ci.chatView.queueAppendText(chunk)
+	})
 
-	response := messages.ChatMessage{
-		From:    messages.Assistant,
-		Content: "",
-	}
+	// Now that the response is complete, append a few newlines to separate it
+	// from the next user message and scroll to the end of the chat view.
+	ci.chatView.queueAppendText("\n\n")
+	ci.chatView.messageList.ScrollToEnd()
 
-	// Append the response to the chat messages view
-	go func() {
-		ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
-
-		for chunk := range responseChan {
-			// Add the assistant's response to the chat view
-			ci.chatView.queueAppendText(chunk)
-
-			// Update the ChatMessage that will be part of the conversation
-			response.Content += chunk
-		}
-
-		ci.chatView.queueAppendText("\n\n")
-		ci.chatView.messageList.ScrollToEnd()
-
-		ci.chatView.conversation = append(ci.chatView.conversation, response)
-
-		done <- true
-	}()
-
-	// Re-enable the chat input when the assistant has finished
-	go func() {
-		<-done
-
-		ci.chatView.ui.app.QueueUpdateDraw(func() {
-			ci.SetDisabled(false)
-		})
-	}()
+	// Re-enable the chat input
+	ci.SetDisabled(false)
 }
 
 // Appends text to the chat view.
@@ -215,4 +193,78 @@ func (cv *chatView) queueAppendText(text string) {
 	cv.ui.app.QueueUpdateDraw(func() {
 		cv.messageList.SetText(cv.messageList.GetText(false) + text)
 	})
+}
+
+// unicodeToASCII maps Unicode box-drawing characters to their ASCII approximations.
+func unicodeToASCII(r rune) string {
+	switch r {
+	case '─': // U+2500
+		return "-"
+	case '│': // U+2502
+		return "|"
+	case '┌': // U+250C
+		return "+"
+	case '┐': // U+2510
+		return "+"
+	case '└': // U+2514
+		return "+"
+	case '┘': // U+2518
+		return "+"
+	case '├': // U+251C
+		return "+"
+	case '┤': // U+2524
+		return "+"
+	case '┬': // U+252C
+		return "+"
+	case '┴': // U+2534
+		return "+"
+	case '┼': // U+253C
+		return "+"
+	case '═': // U+2550
+		return "="
+	case '║': // U+2551
+		return "||"
+	case '╔': // U+2554
+		return "+"
+	case '╗': // U+2557
+		return "+"
+	case '╚': // U+255A
+		return "+"
+	case '╝': // U+255D
+		return "+"
+	case '╠': // U+2560
+		return "+"
+	case '╣': // U+2563
+		return "+"
+	case '╦': // U+2566
+		return "+"
+	case '╩': // U+2569
+		return "+"
+	case '╬': // U+256C
+		return "+"
+	case '\u00A0': // Non-breaking space U+00A0
+		return " "
+	case ' ': // ASCII space U+0020
+		return " "
+	default:
+		return string(r) // Return the original character if no approximation found
+	}
+}
+
+// asciiDamnit converts the raw bytes of box-drawing characters into their
+// ASCII equivalents. tview's ANSIWriter and github.com/rivo/uniseg handle some
+// ANSI escape codes, but it does not box drawing characters, such as those
+// output by tree(1).
+func asciiDamnit(input string) string {
+	bytes := []byte(input)
+
+	var sb strings.Builder
+
+	for len(bytes) > 0 {
+		r, size := utf8.DecodeRune(bytes)
+		sb.WriteString(unicodeToASCII(r))
+		bytes = bytes[size:]
+	}
+
+	return sb.String()
 }
