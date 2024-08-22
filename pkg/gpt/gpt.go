@@ -8,6 +8,8 @@ import (
 	"os"
 
 	openai "github.com/sashabaranov/go-openai"
+
+	"github.com/sysread/fnord/pkg/messages"
 )
 
 const (
@@ -17,9 +19,9 @@ const (
 )
 
 type Client interface {
-	GetSummary(conversation Conversation) (string, error)
-	GetCompletion(conversation Conversation) (string, error)
-	GetCompletionStream(conversation Conversation) chan string
+	GetSummary(conversation messages.Conversation) (string, error)
+	GetCompletion(conversation messages.Conversation) (string, error)
+	GetCompletionStream(conversation messages.Conversation) chan string
 	GetEmbedding(text string) ([]float32, error)
 }
 
@@ -33,7 +35,7 @@ func NewOpenAIClient() *OpenAIClient {
 	return &OpenAIClient{client: client}
 }
 
-func (c *OpenAIClient) GetSummary(conversation Conversation) (string, error) {
+func (c *OpenAIClient) GetSummary(conversation messages.Conversation) (string, error) {
 	systemPrompt := "Your job is to summarize a conversation. Respond ONLY with a summary of the discussion, followed by a list of ALL facts identified in the conversation."
 	userPrompt := conversation.ChatTranscript()
 
@@ -56,7 +58,7 @@ func (c *OpenAIClient) GetSummary(conversation Conversation) (string, error) {
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
 }
 
-func (c *OpenAIClient) GetCompletion(conversation Conversation) (string, error) {
+func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string, error) {
 	res, err := c.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
@@ -73,7 +75,7 @@ func (c *OpenAIClient) GetCompletion(conversation Conversation) (string, error) 
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
 }
 
-func (c *OpenAIClient) GetCompletionStream(conversation Conversation) chan string {
+func (c *OpenAIClient) GetCompletionStream(conversation messages.Conversation) chan string {
 	out := make(chan string)
 
 	go func() {

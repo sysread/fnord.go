@@ -96,6 +96,7 @@ import (
 	"github.com/segmentio/encoding/json"
 
 	"github.com/sysread/fnord/pkg/gpt"
+	"github.com/sysread/fnord/pkg/messages"
 )
 
 type DataStore struct {
@@ -113,7 +114,7 @@ type Conversation struct {
 	Hash      [32]byte
 	Summary   string
 	Embedding []float32
-	Messages  []gpt.ChatMessage
+	Messages  []messages.ChatMessage
 }
 
 type ConversationIndexEntry struct {
@@ -180,7 +181,7 @@ func (ds *DataStore) NewConversation() *Conversation {
 		Created:   time.Now(),
 		Modified:  time.Now(),
 		UUID:      uuid.NewString(),
-		Messages:  make([]gpt.ChatMessage, 0, 50),
+		Messages:  make([]messages.ChatMessage, 0, 50),
 	}
 }
 
@@ -193,15 +194,15 @@ func (ds *DataStore) LoadConversation(info ConversationIndexEntry) (*Conversatio
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	messages := make([]gpt.ChatMessage, 0, 50)
+	msgs := make([]messages.ChatMessage, 0, 50)
 	for scanner.Scan() {
-		var data gpt.ChatMessage
+		var data messages.ChatMessage
 
 		if err := json.Unmarshal(scanner.Bytes(), &data); err != nil {
 			return nil, err
 		}
 
-		messages = append(messages, data)
+		msgs = append(msgs, data)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -213,7 +214,7 @@ func (ds *DataStore) LoadConversation(info ConversationIndexEntry) (*Conversatio
 		Created:   info.Created,
 		Modified:  info.Modified,
 		UUID:      info.UUID,
-		Messages:  messages,
+		Messages:  msgs,
 	}
 
 	return conversation, nil
@@ -304,7 +305,7 @@ func (ds *DataStore) Search(query string, numResults int) ([]ConversationIndexEn
 // -----------------------------------------------------------------------------
 
 // AddMessage adds a message to the conversation
-func (c *Conversation) AddMessage(message gpt.ChatMessage) {
+func (c *Conversation) AddMessage(message messages.ChatMessage) {
 	c.Messages = append(c.Messages, message)
 }
 

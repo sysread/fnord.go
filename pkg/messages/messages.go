@@ -1,4 +1,4 @@
-package gpt
+package messages
 
 import (
 	"bufio"
@@ -8,17 +8,6 @@ import (
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
-)
-
-const (
-	You       Sender = "You"
-	Assistant Sender = "Assistant"
-
-	// OpenAI has a token limit per request. When a file is too large to send
-	// as part of a conversation message, we can split it up into smaller
-	// chunks. 30k is a safe limit, lower than needed to avoid hitting the
-	// token limit.
-	MaxChunkSize = 30_000
 )
 
 type Sender string
@@ -34,6 +23,17 @@ type Conversation []ChatMessage
 type FileDoesNotExist struct {
 	FilePath string
 }
+
+const (
+	You       Sender = "You"
+	Assistant Sender = "Assistant"
+
+	// OpenAI has a token limit per request. When a file is too large to send
+	// as part of a conversation message, we can split it up into smaller
+	// chunks. 30k is a safe limit, lower than needed to avoid hitting the
+	// token limit.
+	MaxChunkSize = 30_000
+)
 
 func (e *FileDoesNotExist) Error() string {
 	return fmt.Sprintf("file does not exist: %s", e.FilePath)
@@ -205,7 +205,6 @@ func trimMessage(msg string) string {
 func splitFileIntoDigestibleChunks(filePath string) []string {
 	file, err := os.Open(filePath)
 
-	// TODO display file picker instead?
 	if err != nil {
 		return []string{}
 	}

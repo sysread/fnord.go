@@ -10,6 +10,7 @@ import (
 	"github.com/sysread/textsel"
 
 	"github.com/sysread/fnord/pkg/gpt"
+	"github.com/sysread/fnord/pkg/messages"
 )
 
 type chatInput struct {
@@ -22,7 +23,7 @@ type chatView struct {
 
 	gptClient *gpt.OpenAIClient
 
-	conversation gpt.Conversation
+	conversation messages.Conversation
 
 	*tview.Frame
 	container   *tview.Flex
@@ -34,7 +35,7 @@ func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
 		ui:           ui,
 		gptClient:    gpt.NewOpenAIClient(),
-		conversation: []gpt.ChatMessage{},
+		conversation: []messages.ChatMessage{},
 	}
 
 	cv.userInput = cv.newChatInput()
@@ -123,19 +124,19 @@ func (ci *chatInput) onSubmit() {
 	// Disable the chat input while the assistant is responding
 	ci.SetDisabled(true)
 
-	var messages []gpt.ChatMessage
+	var msgs []messages.ChatMessage
 	messageText := ci.GetText()
 
 	// Parse the user message
 	for {
-		parsed, err := gpt.ParseMessage(gpt.You, messageText)
+		parsed, err := messages.ParseMessage(messages.You, messageText)
 
 		if err == nil {
-			messages = parsed
+			msgs = parsed
 			break
 		}
 
-		if fileDoesNotExist, ok := err.(*gpt.FileDoesNotExist); ok {
+		if fileDoesNotExist, ok := err.(*messages.FileDoesNotExist); ok {
 			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", fileDoesNotExist.FilePath)
 
 			done := make(chan bool)
@@ -155,7 +156,7 @@ func (ci *chatInput) onSubmit() {
 	// Clear the chat input after the user has sent the message
 	ci.SetText("", false)
 
-	if len(messages) == 0 {
+	if len(msgs) == 0 {
 		ci.SetDisabled(false)
 		return
 	}
@@ -164,7 +165,7 @@ func (ci *chatInput) onSubmit() {
 	done := make(chan bool)
 
 	// Add the parsed user messages to the chat view and conversation.
-	for _, message := range messages {
+	for _, message := range msgs {
 		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + message.Content + "\n\n")
 		ci.chatView.conversation = append(ci.chatView.conversation, message)
 		ci.chatView.messageList.ScrollToEnd()
@@ -174,8 +175,8 @@ func (ci *chatInput) onSubmit() {
 	// Get the assistant's response
 	responseChan := ci.chatView.gptClient.GetCompletionStream(ci.chatView.conversation)
 
-	response := gpt.ChatMessage{
-		From:    gpt.Assistant,
+	response := messages.ChatMessage{
+		From:    messages.Assistant,
 		Content: "",
 	}
 
