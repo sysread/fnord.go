@@ -18,20 +18,10 @@ const (
 	embeddingsModel openai.EmbeddingModel = openai.LargeEmbedding3
 )
 
-const systemSummaryPrompt = `
-Your job is to summarize a conversation.
-It is essential that you identify all significant facts in the conversation transcript.
-You will assemble a nested an outline of this conversation in markdown format.
-If there is file content present, be sure to include the file path and an individual summary of the file content as a distinct set of nested list items.
-If there is command output, include the command, a the relevance of its output, and then VERY tersely summarize how it relates to the conversation.
-Respond ONLY with a summary of the discussion, followed by your outline of ALL facts identified in the conversation.
-`
-
 type Client interface {
 	GetCompletion(conversation messages.Conversation) (string, error)
 	GetCompletionStream(conversation messages.Conversation) chan string
 	GetEmbedding(text string) ([]float32, error)
-	GetSummary(conversation messages.Conversation) (string, error)
 	QuickCompletion(systemPrompt string, userPrompt string) (string, error)
 }
 
@@ -63,11 +53,6 @@ func (c *OpenAIClient) QuickCompletion(systemPrompt string, userPrompt string) (
 	}
 
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
-}
-
-func (c *OpenAIClient) GetSummary(conversation messages.Conversation) (string, error) {
-	userPrompt := conversation.ChatTranscript()
-	return c.QuickCompletion(systemSummaryPrompt, userPrompt)
 }
 
 func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string, error) {

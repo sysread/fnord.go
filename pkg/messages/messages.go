@@ -1,7 +1,6 @@
 package messages
 
 import (
-	"bytes"
 	"bufio"
 	"fmt"
 	"os"
@@ -272,18 +271,4 @@ func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
 	}
 
 	return parts
-}
-
-// ConvertANSIToTviewTags takes a byte slice of ANSI-encoded text and returns a plain string.
-func convertANSIToTviewTags(ansiText []byte) (string, error) {
-	var buffer bytes.Buffer
-
-	// Use tview.ANSIWriter to write to the buffer
-	writer := tview.ANSIWriter(&buffer)
-	_, err := writer.Write(ansiText)
-	if err != nil {
-		return "", err
-	}
-
-	return buffer.String(), nil
 }

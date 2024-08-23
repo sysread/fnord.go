@@ -40,8 +40,8 @@ func New() *UI {
 }
 
 func (ui *UI) Run() {
-	ui.OpenHome()
-	//ui.OpenChat()
+	//ui.OpenHome()
+	ui.OpenChat()
 
 	if err := ui.app.Run(); err != nil {
 		panic(err)

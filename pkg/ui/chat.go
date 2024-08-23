@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
+	"github.com/charmbracelet/glamour"
 
 	"github.com/sysread/fnord/pkg/chat"
 	"github.com/sysread/fnord/pkg/gpt"
@@ -21,16 +23,16 @@ type chatInput struct {
 }
 
 type chatView struct {
-	ui *UI
-
-	gptClient *gpt.OpenAIClient
-
-	chat *chat.Chat
-
 	*tview.Frame
-	container   *tview.Flex
-	messageList *textsel.TextSel
-	userInput   *chatInput
+	ui              *UI
+	gptClient       *gpt.OpenAIClient
+	chat            *chat.Chat
+	container       *tview.Flex
+	chatFlex        *tview.Flex
+	messageList     *textsel.TextSel
+	userInput       *chatInput
+	receivingBuffer *tview.TextView
+	isReceiving     bool
 }
 
 func (ui *UI) newChatView() *chatView {
@@ -40,22 +42,38 @@ func (ui *UI) newChatView() *chatView {
 		chat:      chat.NewChat(),
 	}
 
+	cv.container = tview.NewFlex().
+		SetDirection(tview.FlexRow)
+
+	cv.receivingBuffer = tview.NewTextView().
+		SetDynamicColors(true).
+		SetScrollable(true).
+		SetWordWrap(true)
+
 	cv.userInput = cv.newChatInput()
 
 	cv.messageList = textsel.NewTextSel()
-
 	cv.messageList.
+		SetDynamicColors(true).
 		SetScrollable(true).
 		SetWordWrap(true)
 
 	cv.messageList.SetSelectFunc(func(s string) {
-		clipboard.WriteAll(strings.TrimSpace(s))
+		// Write to paste buffer
+		copyText := stripTviewTags(strings.TrimSpace(s))
+		clipboard.WriteAll(copyText)
+
+		// Reset focus to chat input
+		cv.ui.app.SetFocus(cv.messageList)
+		cv.messageList.MoveToLastLine()
 	})
 
-	cv.container = tview.NewFlex().
+	cv.chatFlex = tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(cv.messageList, 0, 5, false).
 		AddItem(cv.userInput, 0, 1, false)
+
+	cv.container.AddItem(cv.chatFlex, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
 		title: "Chat",
@@ -122,6 +140,27 @@ func (cv *chatView) newChatInput() *chatInput {
 	return chatInput
 }
 
+func (cv *chatView) ToggleReceiving() {
+	if cv.isReceiving {
+		lastMessage := cv.chat.LastMessage()
+		if lastMessage != nil {
+			cv.container.RemoveItem(cv.receivingBuffer)
+			cv.container.AddItem(cv.chatFlex, 0, 1, false)
+			cv.isReceiving = false
+
+			cv.queueAppendText("[green::b]Assistant:[-:-:-]\n")
+			cv.queueAppendText(glamourize(lastMessage.Content))
+			cv.messageList.ScrollToEnd()
+		}
+	} else {
+		cv.receivingBuffer.SetText(cv.messageList.GetText(false))
+		cv.container.RemoveItem(cv.chatFlex)
+		cv.container.AddItem(cv.receivingBuffer, 0, 1, false)
+		cv.isReceiving = true
+		cv.receivingBuffer.ScrollToEnd()
+	}
+}
+
 func (ci *chatInput) onSubmit() {
 	// Disable the chat input while the assistant is responding
 	ci.SetDisabled(true)
@@ -165,14 +204,16 @@ func (ci *chatInput) onSubmit() {
 
 	// Add the parsed user messages to the chat view and conversation.
 	for _, msg := range msgs {
-		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + msg.Content + "\n\n")
+		content := glamourize(msg.Content)
+		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n" + content)
 		ci.chatView.chat.AddMessage(msg)
 		ci.chatView.messageList.ScrollToEnd()
 		ci.chatView.messageList.MoveToLastLine()
 	}
 
 	// Get the assistant's response
-	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+	ci.chatView.ToggleReceiving()
+	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n")
 	ci.chatView.chat.RequestResponse(func(chunk string) {
 		// Append the assistant's response to the chat view
 		ci.chatView.queueAppendText(chunk)
@@ -180,8 +221,7 @@ func (ci *chatInput) onSubmit() {
 
 	// Now that the response is complete, append a few newlines to separate it
 	// from the next user message and scroll to the end of the chat view.
-	ci.chatView.queueAppendText("\n\n")
-	ci.chatView.messageList.ScrollToEnd()
+	ci.chatView.ToggleReceiving()
 
 	// Re-enable the chat input
 	ci.SetDisabled(false)
@@ -189,14 +229,67 @@ func (ci *chatInput) onSubmit() {
 
 // Appends text to the chat view.
 func (cv *chatView) queueAppendText(text string) {
-	cv.ui.app.QueueUpdateDraw(func() {
-		cv.messageList.SetText(cv.messageList.GetText(false) + asciiDamnit(text))
-	})
+	if cv.isReceiving {
+		cv.ui.app.QueueUpdateDraw(func() {
+			cv.receivingBuffer.SetText(cv.receivingBuffer.GetText(false) + asciiDamnit(text))
+			cv.receivingBuffer.ScrollToEnd()
+		})
+	} else {
+		cv.ui.app.QueueUpdateDraw(func() {
+			cv.messageList.SetText(cv.messageList.GetText(false) + asciiDamnit(text))
+			cv.messageList.ScrollToEnd()
+		})
+	}
+}
+
+// stripTviewTags removes tview tags from a string.
+func stripTviewTags(input string) string {
+	re := regexp.MustCompile(`\[[^\[\]]*\]`)
+	return re.ReplaceAllString(input, "")
+}
+
+// glamourize converts markdown to tview tags by first rendering the markdown
+// as ANSI using glamour and then translating the ANSI to tview tags.
+func glamourize(content string) string {
+	// Render the markdown content with ANSI escapes using glamour
+	rendered, _ := glamour.Render(content, "dark")
+
+	// Translate the ANSI-escaped content to tview tags
+	rendered = tview.TranslateANSI(rendered)
+
+	// Glamour-rendered markdown is indented by two spaces, so we will remove
+	// up to two spaces at the beginning of each line.
+	leadingSpacesRe := regexp.MustCompile(`(?m)^ {1,2}`)
+	rendered = leadingSpacesRe.ReplaceAllString(rendered, "")
+
+	return rendered
+}
+
+// asciiDamnit converts the raw bytes of box-drawing characters into their
+// ASCII equivalents. tview's ANSIWriter and github.com/rivo/uniseg handle some
+// ANSI escape codes, but it does not box drawing characters, such as those
+// output by tree(1).
+func asciiDamnit(input string) string {
+	bytes := []byte(input)
+
+	var sb strings.Builder
+
+	for len(bytes) > 0 {
+		r, size := utf8.DecodeRune(bytes)
+		sb.WriteString(unicodeToASCII(r))
+		bytes = bytes[size:]
+	}
+
+	return sb.String()
 }
 
 // unicodeToASCII maps Unicode box-drawing characters to their ASCII approximations.
 func unicodeToASCII(r rune) string {
 	switch r {
+	case '•':
+		return "*"
+	case '…':
+		return "..."
 	case '─': // U+2500
 		return "-"
 	case '│': // U+2502
@@ -248,22 +341,4 @@ func unicodeToASCII(r rune) string {
 	default:
 		return string(r) // Return the original character if no approximation found
 	}
-}
-
-// asciiDamnit converts the raw bytes of box-drawing characters into their
-// ASCII equivalents. tview's ANSIWriter and github.com/rivo/uniseg handle some
-// ANSI escape codes, but it does not box drawing characters, such as those
-// output by tree(1).
-func asciiDamnit(input string) string {
-	bytes := []byte(input)
-
-	var sb strings.Builder
-
-	for len(bytes) > 0 {
-		r, size := utf8.DecodeRune(bytes)
-		sb.WriteString(unicodeToASCII(r))
-		bytes = bytes[size:]
-	}
-
-	return sb.String()
 }
