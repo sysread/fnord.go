@@ -7,15 +7,24 @@ import (
 	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/glamour"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
-	"github.com/charmbracelet/glamour"
 
 	"github.com/sysread/fnord/pkg/chat"
 	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
 )
+
+const slashHelp = `
+Slash Commands
+--------------
+\f - Send a file contents
+\x - Send command output
+--------------
+escape closes
+`
 
 type chatInput struct {
 	chatView *chatView
@@ -24,15 +33,22 @@ type chatInput struct {
 
 type chatView struct {
 	*tview.Frame
-	ui              *UI
-	gptClient       *gpt.OpenAIClient
-	chat            *chat.Chat
-	container       *tview.Flex
-	chatFlex        *tview.Flex
-	messageList     *textsel.TextSel
-	userInput       *chatInput
+
+	ui        *UI
+	gptClient *gpt.OpenAIClient
+	chat      *chat.Chat
+
+	container *tview.Flex
+
+	chatFlex    *tview.Flex
+	messageList *textsel.TextSel
+	userInput   *chatInput
+
 	receivingBuffer *tview.TextView
 	isReceiving     bool
+
+	helpModal       *tview.Modal
+	helpModalIsOpen bool
 }
 
 func (ui *UI) newChatView() *chatView {
@@ -45,6 +61,12 @@ func (ui *UI) newChatView() *chatView {
 	cv.container = tview.NewFlex().
 		SetDirection(tview.FlexRow)
 
+	cv.helpModal = tview.NewModal()
+	cv.helpModal.SetText(slashHelp).
+		SetDoneFunc(func(_ int, _ string) {
+			cv.toggleHelp()
+		})
+
 	cv.receivingBuffer = tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
@@ -54,7 +76,6 @@ func (ui *UI) newChatView() *chatView {
 
 	cv.messageList = textsel.NewTextSel()
 	cv.messageList.
-		SetDynamicColors(true).
 		SetScrollable(true).
 		SetWordWrap(true)
 
@@ -64,8 +85,7 @@ func (ui *UI) newChatView() *chatView {
 		clipboard.WriteAll(copyText)
 
 		// Reset focus to chat input
-		cv.ui.app.SetFocus(cv.messageList)
-		cv.messageList.MoveToLastLine()
+		cv.FocusUserInput()
 	})
 
 	cv.chatFlex = tview.NewFlex().
@@ -81,6 +101,7 @@ func (ui *UI) newChatView() *chatView {
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},
 			{"space, enter", "select, copy (in msgs)"},
+			{"ctrl-/", "help"},
 			{"esc", "home"},
 		},
 	})
@@ -88,17 +109,23 @@ func (ui *UI) newChatView() *chatView {
 	cv.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
+			if cv.helpModalIsOpen {
+				cv.toggleHelp()
+				return nil
+			}
+
 			ui.OpenHome()
 			return nil
 		case tcell.KeyBacktab:
 			if cv.ui.app.GetFocus() == cv.userInput {
-				cv.ui.app.SetFocus(cv.messageList)
-				cv.messageList.MoveToLastLine()
+				cv.FocusMessageList()
 			} else {
-				cv.ui.app.SetFocus(cv.userInput)
-				cv.messageList.ScrollToEnd()
-				cv.messageList.ResetCursor()
+				cv.FocusUserInput()
 			}
+			return nil
+		// This is actually Ctrl-/
+		case tcell.KeyCtrlUnderscore:
+			cv.toggleHelp()
 		}
 
 		return event
@@ -109,6 +136,20 @@ func (ui *UI) newChatView() *chatView {
 
 func (cv *chatView) GetInitialFocus() tview.Primitive {
 	return cv.userInput
+}
+
+func (cv *chatView) toggleHelp() {
+	if cv.helpModalIsOpen {
+		cv.helpModalIsOpen = false
+		cv.container.RemoveItem(cv.helpModal)
+		cv.container.AddItem(cv.chatFlex, 0, 1, false)
+		cv.ui.app.SetFocus(cv.userInput)
+	} else {
+		cv.helpModalIsOpen = true
+		cv.container.RemoveItem(cv.chatFlex)
+		cv.container.AddItem(cv.helpModal, 0, 1, false)
+		cv.ui.app.SetFocus(cv.helpModal)
+	}
 }
 
 // Builds the chatInput component, which is a text area that captures user
@@ -138,6 +179,17 @@ func (cv *chatView) newChatInput() *chatInput {
 	})
 
 	return chatInput
+}
+
+func (cv *chatView) FocusUserInput() {
+	cv.ui.app.SetFocus(cv.userInput)
+	cv.messageList.ScrollToEnd()
+	cv.messageList.ResetCursor()
+}
+
+func (cv *chatView) FocusMessageList() {
+	cv.ui.app.SetFocus(cv.messageList)
+	cv.messageList.MoveToLastLine()
 }
 
 func (cv *chatView) ToggleReceiving() {
