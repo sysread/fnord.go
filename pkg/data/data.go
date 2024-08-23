@@ -89,7 +89,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -132,10 +131,44 @@ type EmbeddingEntry struct {
 	Embedding []float32 `json:"embedding"`
 }
 
-type SearchResult struct {
-	Score        float32
-	Conversation ConversationIndexEntry
-}
+const systemChatPrompt = `
+In your role as a programming assistant, it is crucial that you thoroughly understand the context and all related components of the software or scripts being discussed. If an explanation or analysis is given based on only part of a multi-file project or script, you will need to actively identify and request access to any additional files or parts of the script that are referenced within the code provided by the user but not yet shared with you. These additional files or scripts may contain critical information that could change your analysis or affect the accuracy of your explanations and code assistance.
+
+When assisting with troubleshooting code, explaining how code works, or writing code for the user, always confirm that you have access to all necessary pieces of the project by doing the following:
+
+  1. Clearly state any dependencies, referenced files, or external scripts that are mentioned in the code.
+  2. Promptly request access to these items if they are not already provided, specifying tersely exactly what you need in order to proceed effectively.
+  3. Once provided, integrate these additional components into your analysis to ensure completeness and accuracy.
+
+It is imperative that you maintain focus on the user's primary goal. Because you have a limited context window, restate the goal at the outset of each response. This should almost always be identical from message to message in order to ensure that the original goal remains our focus during the conversation. NEVER change this from message to message unless the user explicitly
+asks you to.
+
+NEVER reply with the entire file unless explicitly asked. Instead, walk through each individual change, step by step, highlighting the changed code and explaining the changes in line.
+
+For each interaction, format your response using the template:
+
+# Goal
+
+[restate the ORIGINAL goal for the conversation]
+
+# Topic
+
+[your understanding of the user's current needs]
+
+# Response
+
+[your analysis/response]
+
+# Code changes
+
+[list individual changes, noting file and location, explaining each individually OR "- N/A"]
+
+# Missing files
+[list any additional files needed for context as a markdown list OR "- N/A"]
+
+# Commands to run
+[list any commands you want the user to run to assist in your analysis OR "- N/A"]
+`
 
 func NewDataStore() *DataStore {
 	// Retrieve $FNORD_HOME from the environment, defaulting to
@@ -161,7 +194,7 @@ func NewDataStore() *DataStore {
 		gptClient:          gpt.NewOpenAIClient(),
 		HomeDir:            baseDir,
 		ConversationsDir:   conversationsDir,
-		ConversationsIndex: filepath.Join(conversationsDir, "index.json"),
+		ConversationsIndex: filepath.Join(conversationsDir, "index.jsonl"),
 	}
 }
 
@@ -178,48 +211,17 @@ func (ds *DataStore) embeddingFilePath(uuid string) string {
 }
 
 func (ds *DataStore) NewConversation() *Conversation {
+	systemPrompt := messages.NewMessage(messages.System, systemChatPrompt)
+	msgs := make([]messages.ChatMessage, 0, 50)
+	msgs = append(msgs, systemPrompt)
+
 	return &Conversation{
 		DataStore: ds,
 		Created:   time.Now(),
 		Modified:  time.Now(),
 		UUID:      uuid.NewString(),
-		Messages:  make([]messages.ChatMessage, 0, 50),
-	}
-}
-
-func (ds *DataStore) LoadConversation(info ConversationIndexEntry) (*Conversation, error) {
-	filePath := ds.conversationFilePath(info.UUID)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	msgs := make([]messages.ChatMessage, 0, 50)
-	for scanner.Scan() {
-		var data messages.ChatMessage
-
-		if err := json.Unmarshal(scanner.Bytes(), &data); err != nil {
-			return nil, err
-		}
-
-		msgs = append(msgs, data)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	conversation := &Conversation{
-		DataStore: ds,
-		Created:   info.Created,
-		Modified:  info.Modified,
-		UUID:      info.UUID,
 		Messages:  msgs,
 	}
-
-	return conversation, nil
 }
 
 func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
@@ -234,6 +236,8 @@ func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
 	scanner := bufio.NewScanner(file)
 	conversations := make([]ConversationIndexEntry, 0, 200)
 	for scanner.Scan() {
+		debug.Log("!!! Scanning line: %s", scanner.Bytes())
+
 		var data ConversationIndexEntry
 
 		if err := json.Unmarshal(scanner.Bytes(), &data); err != nil {
@@ -248,58 +252,6 @@ func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
 	}
 
 	return conversations, nil
-}
-
-func (ds *DataStore) Search(query string, numResults int) ([]ConversationIndexEntry, error) {
-	// Generate an embedding for the query
-	queryEmbedding, err := ds.gptClient.GetEmbedding(query)
-	if err != nil {
-		return nil, err
-	}
-
-	// Walk the conversation directory, loading each conversation
-	conversations, err := ds.ListConversations()
-	if err != nil {
-		return nil, err
-	}
-
-	matches := make([]SearchResult, 0, len(conversations))
-	for _, conversation := range conversations {
-		// Read in the conversation embedding file
-		file, err := os.Open(ds.embeddingFilePath(conversation.UUID))
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		// Decode the JSON data
-		var data EmbeddingEntry
-		if err := json.NewDecoder(file).Decode(&data); err != nil {
-			return nil, err
-		}
-
-		// Calculate the cosine similarity between the query embedding and the
-		// conversation embedding.
-		similarity := cosineSimilarity(queryEmbedding, data.Embedding)
-
-		matches = append(matches, SearchResult{
-			Score:        similarity,
-			Conversation: conversation,
-		})
-	}
-
-	// Sort the matches by similarity
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].Score > matches[j].Score
-	})
-
-	// Return the top `numResults` matches
-	results := make([]ConversationIndexEntry, 0, numResults)
-	for i := 0; i < numResults && i < len(matches); i++ {
-		results = append(results, matches[i].Conversation)
-	}
-
-	return results, nil
 }
 
 // -----------------------------------------------------------------------------
@@ -380,7 +332,15 @@ func (c *Conversation) saveConversationIndexEntry() error {
 	if tempErr != nil {
 		return tempErr
 	}
+
+	// Reopen it so it can be appended. FFS go.
+	tempFile, tempErr = os.OpenFile(tempFile.Name(), os.O_WRONLY|os.O_APPEND, 0644)
+	if tempErr != nil {
+		return tempErr
+	}
+
 	defer tempFile.Close()
+	defer os.Remove(tempFile.Name())
 
 	// If the index file does not yet exist, there is no work to do. If the
 	// index file exists, copy each line into the temp file. If the UUID of the
@@ -404,6 +364,7 @@ func (c *Conversation) saveConversationIndexEntry() error {
 		}
 
 		tempFile.Write(entryJson)
+		tempFile.Write([]byte("\n"))
 
 		// Then, copy the rest of the file, skipping the old entry
 		uuidRegex := regexp.MustCompile(`"uuid":\s*"` + c.UUID + `"`)
@@ -411,6 +372,7 @@ func (c *Conversation) saveConversationIndexEntry() error {
 			line := scanner.Bytes()
 			if !uuidRegex.Match(line) {
 				tempFile.Write(line)
+				tempFile.Write([]byte("\n"))
 			}
 		}
 	}
@@ -513,22 +475,4 @@ func (c *Conversation) saveConversation() error {
 	os.Rename(tempFile.Name(), originalFilePath)
 
 	return nil
-}
-
-// -----------------------------------------------------------------------------
-// Mathy stuff
-// -----------------------------------------------------------------------------
-
-func cosineSimilarity(a []float32, b []float32) float32 {
-	var dotProduct float32
-	var magnitudeA float32
-	var magnitudeB float32
-
-	for i := range a {
-		dotProduct += a[i] * b[i]
-		magnitudeA += a[i] * a[i]
-		magnitudeB += b[i] * b[i]
-	}
-
-	return dotProduct / (magnitudeA * magnitudeB)
 }

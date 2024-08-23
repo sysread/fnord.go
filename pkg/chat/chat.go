@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/sysread/fnord/pkg/data"
@@ -57,6 +58,30 @@ func (c *Chat) AddMessage(msg messages.ChatMessage) {
 
 func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 	done := make(chan bool)
+
+	// Add summaries of prior conversations that could help inform the current
+	// conversation. This is done before starting the streaming response so
+	// that the assistant can use the summaries to improve its responses.
+	related, err := c.dataStore.Search(c.conversation.Transcript(), 5)
+	if err != nil {
+		debug.Log("Error searching for related conversations: %v", err)
+	} else {
+		var buffer strings.Builder
+
+		buffer.WriteString("Summary of related past conversations:\n\n")
+
+		for _, conversation := range related {
+			fmt.Fprintf(&buffer, "Conversation occurring between %v and %v\n", conversation.Created, conversation.Modified)
+			fmt.Fprintf(&buffer, "%s\n\n", conversation.Summary)
+		}
+
+		relatedMessage := messages.NewMessage(messages.System, buffer.String())
+		relatedMessage.IsHidden = true
+
+		debug.Log("Related messages: %s", relatedMessage.Content)
+
+		c.conversation.AddMessage(relatedMessage)
+	}
 
 	// Buffer to collect the streaming response
 	var buf strings.Builder

@@ -18,11 +18,21 @@ const (
 	embeddingsModel openai.EmbeddingModel = openai.LargeEmbedding3
 )
 
+const systemSummaryPrompt = `
+Your job is to summarize a conversation.
+It is essential that you identify all significant facts in the conversation transcript.
+You will assemble a nested an outline of this conversation in markdown format.
+If there is file content present, be sure to include the file path and an individual summary of the file content as a distinct set of nested list items.
+If there is command output, include the command, a the relevance of its output, and then VERY tersely summarize how it relates to the conversation.
+Respond ONLY with a summary of the discussion, followed by your outline of ALL facts identified in the conversation.
+`
+
 type Client interface {
-	GetSummary(conversation messages.Conversation) (string, error)
 	GetCompletion(conversation messages.Conversation) (string, error)
 	GetCompletionStream(conversation messages.Conversation) chan string
 	GetEmbedding(text string) ([]float32, error)
+	GetSummary(conversation messages.Conversation) (string, error)
+	QuickCompletion(systemPrompt string, userPrompt string) (string, error)
 }
 
 type OpenAIClient struct {
@@ -35,14 +45,11 @@ func NewOpenAIClient() *OpenAIClient {
 	return &OpenAIClient{client: client}
 }
 
-func (c *OpenAIClient) GetSummary(conversation messages.Conversation) (string, error) {
-	systemPrompt := "Your job is to summarize a conversation. Respond ONLY with a summary of the discussion, followed by a list of ALL facts identified in the conversation."
-	userPrompt := conversation.ChatTranscript()
-
+func (c *OpenAIClient) QuickCompletion(systemPrompt string, userPrompt string) (string, error) {
 	res, err := c.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model:    summaryModel,
+			Model: summaryModel,
 			Messages: []openai.ChatCompletionMessage{
 				{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
 				{Role: openai.ChatMessageRoleUser, Content: userPrompt},
@@ -56,6 +63,11 @@ func (c *OpenAIClient) GetSummary(conversation messages.Conversation) (string, e
 	}
 
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
+}
+
+func (c *OpenAIClient) GetSummary(conversation messages.Conversation) (string, error) {
+	userPrompt := conversation.ChatTranscript()
+	return c.QuickCompletion(systemSummaryPrompt, userPrompt)
 }
 
 func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string, error) {

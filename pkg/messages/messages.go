@@ -29,6 +29,7 @@ type FileDoesNotExist struct {
 const (
 	You       Sender = "You"
 	Assistant Sender = "Assistant"
+	System    Sender = "System"
 
 	// OpenAI has a token limit per request. When a file is too large to send
 	// as part of a conversation message, we can split it up into smaller
@@ -63,7 +64,9 @@ func (c Conversation) ChatTranscript() string {
 	transcript := ""
 
 	for _, message := range c {
-		transcript += fmt.Sprintf("%s: %s\n\n", message.From, message.Content)
+		if message.From != System {
+			transcript += fmt.Sprintf("%s: %s\n\n", message.From, message.Content)
+		}
 	}
 
 	return transcript

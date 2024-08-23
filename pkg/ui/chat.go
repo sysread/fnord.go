@@ -164,10 +164,9 @@ func (ci *chatInput) onSubmit() {
 	}
 
 	// Add the parsed user messages to the chat view and conversation.
-	for _, message := range msgs {
-		content := asciiDamnit(message.Content)
-		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n\n")
-		ci.chatView.chat.AddMessage(message)
+	for _, msg := range msgs {
+		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + msg.Content + "\n\n")
+		ci.chatView.chat.AddMessage(msg)
 		ci.chatView.messageList.ScrollToEnd()
 		ci.chatView.messageList.MoveToLastLine()
 	}
@@ -191,7 +190,7 @@ func (ci *chatInput) onSubmit() {
 // Appends text to the chat view.
 func (cv *chatView) queueAppendText(text string) {
 	cv.ui.app.QueueUpdateDraw(func() {
-		cv.messageList.SetText(cv.messageList.GetText(false) + text)
+		cv.messageList.SetText(cv.messageList.GetText(false) + asciiDamnit(text))
 	})
 }
 
