@@ -7,14 +7,17 @@ import (
 	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/glamour"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
 
+	markdown "github.com/MichaelMure/go-term-markdown"
+
 	"github.com/sysread/fnord/pkg/chat"
 	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
+
+	//"github.com/sysread/fnord/pkg/debug"
 )
 
 const slashHelp = `
@@ -200,8 +203,8 @@ func (cv *chatView) ToggleReceiving() {
 			cv.container.AddItem(cv.chatFlex, 0, 1, false)
 			cv.isReceiving = false
 
-			cv.queueAppendText("[green::b]Assistant:[-:-:-]\n")
-			cv.queueAppendText(glamourize(lastMessage.Content))
+			cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+			cv.queueAppendText(cv.renderMarkdown(lastMessage.Content) + "\n")
 			cv.messageList.ScrollToEnd()
 		}
 	} else {
@@ -256,8 +259,8 @@ func (ci *chatInput) onSubmit() {
 
 	// Add the parsed user messages to the chat view and conversation.
 	for _, msg := range msgs {
-		content := glamourize(msg.Content)
-		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n" + content)
+		content := ci.chatView.renderMarkdown(msg.Content)
+		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
 		ci.chatView.chat.AddMessage(msg)
 		ci.chatView.messageList.ScrollToEnd()
 		ci.chatView.messageList.MoveToLastLine()
@@ -265,7 +268,7 @@ func (ci *chatInput) onSubmit() {
 
 	// Get the assistant's response
 	ci.chatView.ToggleReceiving()
-	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n")
+	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
 	ci.chatView.chat.RequestResponse(func(chunk string) {
 		// Append the assistant's response to the chat view
 		ci.chatView.queueAppendText(chunk)
@@ -294,17 +297,14 @@ func (cv *chatView) queueAppendText(text string) {
 	}
 }
 
-// stripTviewTags removes tview tags from a string.
-func stripTviewTags(input string) string {
-	re := regexp.MustCompile(`\[[^\[\]]*\]`)
-	return re.ReplaceAllString(input, "")
-}
+// renderMarkdown converts markdown to tview tags by first rendering the
+// markdown as ANSI and then translating the ANSI to tview tags.
+func (cv *chatView) renderMarkdown(content string) string {
+	// Get the width of the messageList
+	_, _, width, _ := cv.messageList.GetInnerRect()
 
-// glamourize converts markdown to tview tags by first rendering the markdown
-// as ANSI using glamour and then translating the ANSI to tview tags.
-func glamourize(content string) string {
-	// Render the markdown content with ANSI escapes using glamour
-	rendered, _ := glamour.Render(content, "dark")
+	// Render the markdown content as ANSI
+	rendered := string(markdown.Render(content, width, 0))
 
 	// Translate the ANSI-escaped content to tview tags
 	rendered = tview.TranslateANSI(rendered)
@@ -315,6 +315,12 @@ func glamourize(content string) string {
 	rendered = leadingSpacesRe.ReplaceAllString(rendered, "")
 
 	return rendered
+}
+
+// stripTviewTags removes tview tags from a string.
+func stripTviewTags(input string) string {
+	re := regexp.MustCompile(`\[[^\[\]]*\]`)
+	return re.ReplaceAllString(input, "")
 }
 
 // asciiDamnit converts the raw bytes of box-drawing characters into their
@@ -344,6 +350,8 @@ func unicodeToASCII(r rune) string {
 		return "..."
 	case '─': // U+2500
 		return "-"
+	case '┃':
+		return "|"
 	case '│': // U+2502
 		return "|"
 	case '┌': // U+250C
