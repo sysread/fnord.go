@@ -13,8 +13,11 @@ import (
 
 	markdown "github.com/MichaelMure/go-term-markdown"
 
+
 	"github.com/sysread/fnord/pkg/chat"
 	"github.com/sysread/fnord/pkg/messages"
+
+	//"github.com/sysread/fnord/pkg/debug"
 )
 
 const slashHelp = `
@@ -254,11 +257,13 @@ func (ci *chatInput) onSubmit() {
 
 	// Add the parsed user messages to the chat view and conversation.
 	for _, msg := range msgs {
-		content := ci.chatView.renderMarkdown(msg.Content)
-		ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
-		ci.chatView.chat.AddMessage(msg)
-		ci.chatView.messageList.ScrollToEnd()
-		ci.chatView.messageList.MoveToLastLine()
+		if !msg.IsHidden {
+			content := ci.chatView.renderMarkdown(msg.Content)
+			ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
+			ci.chatView.chat.AddMessage(msg)
+			ci.chatView.messageList.ScrollToEnd()
+			ci.chatView.messageList.MoveToLastLine()
+		}
 	}
 
 	// Get the assistant's response
