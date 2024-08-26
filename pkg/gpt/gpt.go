@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	openai "github.com/sashabaranov/go-openai"
 
+	"github.com/sysread/fnord/pkg/config"
 	"github.com/sysread/fnord/pkg/messages"
 )
 
@@ -29,10 +29,10 @@ type OpenAIClient struct {
 	client *openai.Client
 }
 
-func NewOpenAIClient() *OpenAIClient {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	client := openai.NewClient(apiKey)
-	return &OpenAIClient{client: client}
+func NewOpenAIClient(conf *config.Config) *OpenAIClient {
+	return &OpenAIClient{
+		client: openai.NewClient(conf.OpenAIApiKey),
+	}
 }
 
 func (c *OpenAIClient) QuickCompletion(systemPrompt string, userPrompt string) (string, error) {

@@ -14,10 +14,7 @@ import (
 	markdown "github.com/MichaelMure/go-term-markdown"
 
 	"github.com/sysread/fnord/pkg/chat"
-	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
-
-	//"github.com/sysread/fnord/pkg/debug"
 )
 
 const slashHelp = `
@@ -37,9 +34,8 @@ type chatInput struct {
 type chatView struct {
 	*tview.Frame
 
-	ui        *UI
-	gptClient *gpt.OpenAIClient
-	chat      *chat.Chat
+	ui   *UI
+	chat *chat.Chat
 
 	container *tview.Flex
 
@@ -56,9 +52,8 @@ type chatView struct {
 
 func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
-		ui:        ui,
-		gptClient: gpt.NewOpenAIClient(),
-		chat:      chat.NewChat(),
+		ui:   ui,
+		chat: chat.NewChat(ui.Context),
 	}
 
 	cv.container = tview.NewFlex().
@@ -99,7 +94,7 @@ func (ui *UI) newChatView() *chatView {
 	cv.container.AddItem(cv.chatFlex, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
-		title: "Chat",
+		title: "Chat: " + ui.Context.Config.Box,
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},

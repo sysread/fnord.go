@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sysread/fnord/pkg/context"
 	"github.com/sysread/fnord/pkg/data"
 	"github.com/sysread/fnord/pkg/debug"
-	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
 )
 
@@ -59,24 +59,24 @@ If a problem was solved in the conversation, DEFINITELY include the details of t
 Respond ONLY with a summary of the discussion, followed by your outline of ALL facts identified in the conversation.
 `
 
+const searchQueryPrompt = `
+Take the user input and respond ONLY with a very short query string to use RAG to identify matching entries.
+`
+
 type Chat struct {
-	gptClient    *gpt.OpenAIClient
-	dataStore    *data.DataStore
+	context      *context.Context
 	conversation *data.Conversation
 }
 
-func NewChat() *Chat {
-	gptClient := gpt.NewOpenAIClient()
-	dataStore := data.NewDataStore()
-	conversation := dataStore.NewConversation()
+func NewChat(ctx *context.Context) *Chat {
+	conversation := ctx.DataStore.NewConversation()
 
 	systemMessage := messages.NewMessage(messages.System, systemChatPrompt)
 	systemMessage.IsHidden = true
 	conversation.AddMessage(systemMessage)
 
 	return &Chat{
-		gptClient:    gptClient,
-		dataStore:    dataStore,
+		context:      ctx,
 		conversation: conversation,
 	}
 }
@@ -95,7 +95,7 @@ func (c *Chat) AddMessage(msg messages.ChatMessage) {
 			summary, _ := c.GenerateSummary()
 
 			// Using the updated summary, generate a new embedding
-			embedding, _ := c.gptClient.GetEmbedding(summary)
+			embedding, _ := c.context.GptClient.GetEmbedding(summary)
 
 			// Store the updated summary and embedding in the struct
 			c.conversation.SetSummary(summary, embedding)
@@ -116,7 +116,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 	// Add summaries of prior conversations that could help inform the current
 	// conversation. This is done before starting the streaming response so
 	// that the assistant can use the summaries to improve its responses.
-	related, err := c.dataStore.Search(c.conversation.Transcript(), 5)
+	related, err := c.Search(c.conversation.Transcript(), 5)
 	if err != nil {
 		debug.Log("Error searching for related conversations: %v", err)
 	} else {
@@ -139,7 +139,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 	var buf strings.Builder
 
 	// Start the streaming response
-	responseChan := c.gptClient.GetCompletionStream(c.conversation.Messages)
+	responseChan := c.context.GptClient.GetCompletionStream(c.conversation.Messages)
 
 	go func() {
 		// Collect the streaming response
@@ -164,5 +164,24 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 
 func (c *Chat) GenerateSummary() (string, error) {
 	userPrompt := c.conversation.Messages.ChatTranscript()
-	return c.gptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
+	return c.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
+}
+
+// Takes a user's prompt message, uses the fast model to generate a search
+// query from it, converts that to an embedding, and then searches the
+// conversation directory for the most similar conversations.
+func (c *Chat) Search(queryString string, numResults int) ([]data.ConversationIndexEntry, error) {
+	// Generate a search query from the user input
+	query, err := c.context.GptClient.QuickCompletion(searchQueryPrompt, queryString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate an embedding for the newly generated search query
+	embedding, err := c.context.GptClient.GetEmbedding(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.context.DataStore.Search(embedding, numResults)
 }

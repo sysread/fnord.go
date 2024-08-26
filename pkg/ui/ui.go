@@ -2,9 +2,13 @@ package ui
 
 import (
 	"github.com/rivo/tview"
+
+	"github.com/sysread/fnord/pkg/context"
 )
 
 type UI struct {
+	Context *context.Context
+
 	app   *tview.Application
 	pages *tview.Pages
 
@@ -20,8 +24,9 @@ func New() *UI {
 	app.EnableMouse(true)
 
 	ui := &UI{
-		app:   app,
-		pages: tview.NewPages(),
+		Context: context.NewContext(),
+		app:     app,
+		pages:   tview.NewPages(),
 	}
 
 	ui.home = ui.newHomeView()

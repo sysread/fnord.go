@@ -95,16 +95,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/segmentio/encoding/json"
 
+	"github.com/sysread/fnord/pkg/config"
 	"github.com/sysread/fnord/pkg/debug"
-	"github.com/sysread/fnord/pkg/gpt"
 	"github.com/sysread/fnord/pkg/messages"
 )
 
 type DataStore struct {
-	gptClient          gpt.Client
-	HomeDir            string
-	ConversationsDir   string
-	ConversationsIndex string
+	config *config.Config
 }
 
 type Conversation struct {
@@ -131,36 +128,26 @@ type EmbeddingEntry struct {
 	Embedding []float32 `json:"embedding"`
 }
 
-func NewDataStore() *DataStore {
-	// Retrieve $FNORD_HOME from the environment, defaulting to
-	// $HOME/.config/fnord.
-	baseDir := os.Getenv("FNORD_HOME")
-	if baseDir == "" {
-		baseDir = filepath.Join(os.Getenv("HOME"), ".config", "fnord")
-	}
-
-	// Ensure the base directory exists.
-	if err := os.MkdirAll(baseDir, 0700); err != nil {
-		panic(err)
-	}
-
-	conversationsDir := filepath.Join(baseDir, "conversations")
-
-	// Ensure $FNORD_HOME/conversations exists.
-	if err := os.MkdirAll(conversationsDir, 0700); err != nil {
-		panic(err)
-	}
-
+func NewDataStore(config *config.Config) *DataStore {
 	return &DataStore{
-		gptClient:          gpt.NewOpenAIClient(),
-		HomeDir:            baseDir,
-		ConversationsDir:   conversationsDir,
-		ConversationsIndex: filepath.Join(conversationsDir, "index.jsonl"),
+		config: config,
 	}
 }
 
+func (ds *DataStore) home() string {
+	return ds.config.Home
+}
+
+func (ds *DataStore) conversationsDir() string {
+	return ds.config.BoxPath
+}
+
+func (ds *DataStore) conversationsIndex() string {
+	return filepath.Join(ds.config.BoxPath, "index.jsonl")
+}
+
 func (ds *DataStore) conversationDirPath(uuid string) string {
-	return filepath.Join(ds.ConversationsDir, uuid)
+	return filepath.Join(ds.conversationsDir(), uuid)
 }
 
 func (ds *DataStore) conversationFilePath(uuid string) string {
@@ -184,7 +171,7 @@ func (ds *DataStore) NewConversation() *Conversation {
 }
 
 func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
-	file, err := os.Open(ds.ConversationsIndex)
+	file, err := os.Open(ds.conversationsIndex())
 
 	if err != nil {
 		return nil, err
@@ -284,7 +271,7 @@ func (c *Conversation) Save() {
 // Note that before calling this function, the `updateSummary` function should
 // be called to ensure that the `Summary` and `Modified` fields are up to date.
 func (c *Conversation) saveConversationIndexEntry() error {
-	conversationsIndex := c.DataStore.ConversationsIndex
+	conversationsIndex := c.DataStore.conversationsIndex()
 
 	// Open the source file for reading
 	sourceFile, sourceErr := os.Open(conversationsIndex)
@@ -294,7 +281,7 @@ func (c *Conversation) saveConversationIndexEntry() error {
 	}
 
 	// Open a temp file for writing
-	tempFile, tempErr := os.CreateTemp(c.DataStore.HomeDir, "index-*.json")
+	tempFile, tempErr := os.CreateTemp(c.DataStore.home(), "index-*.json")
 	if tempErr != nil {
 		return tempErr
 	}

@@ -6,8 +6,6 @@ import (
 	"sort"
 
 	"github.com/segmentio/encoding/json"
-
-	"github.com/sysread/fnord/pkg/debug"
 )
 
 type searchResult struct {
@@ -15,16 +13,7 @@ type searchResult struct {
 	Conversation ConversationIndexEntry
 }
 
-func (ds *DataStore) Search(userInput string, numResults int) ([]ConversationIndexEntry, error) {
-	// Build a search query from the user input
-	query := ds.getSearchQuery(userInput)
-
-	// Generate an embedding for the query
-	queryEmbedding, err := ds.gptClient.GetEmbedding(query)
-	if err != nil {
-		return nil, err
-	}
-
+func (ds *DataStore) Search(queryEmbedding []float32, numResults int) ([]ConversationIndexEntry, error) {
 	// Walk the conversation directory, loading each conversation
 	conversations, err := ds.ListConversations()
 	if err != nil {
@@ -68,22 +57,6 @@ func (ds *DataStore) Search(userInput string, numResults int) ([]ConversationInd
 	}
 
 	return results, nil
-}
-
-// Takes a user's prompt message, uses the fast model to generate a search
-// query from it, converts that to an embedding, and then searches the
-// conversation directory for the most similar conversations.
-func (ds *DataStore) getSearchQuery(userInput string) string {
-	systemPrompt := "Take the user input and respond ONLY with a very short query string to use RAG to identify matching entries."
-
-	// Generate a search query from the user input
-	query, err := ds.gptClient.QuickCompletion(systemPrompt, userInput)
-	if err != nil {
-		debug.Log("Error generating search query from user input: %v", err)
-		return userInput
-	}
-
-	return query
 }
 
 // Calculates the cosine similarity between two vectors.
