@@ -11,13 +11,10 @@ import (
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
 
-	markdown "github.com/MichaelMure/go-term-markdown"
-
-
 	"github.com/sysread/fnord/pkg/chat"
+	"github.com/sysread/fnord/pkg/debug"
+	"github.com/sysread/fnord/pkg/markdown"
 	"github.com/sysread/fnord/pkg/messages"
-
-	//"github.com/sysread/fnord/pkg/debug"
 )
 
 const slashHelp = `
@@ -300,11 +297,12 @@ func (cv *chatView) queueAppendText(text string) {
 // renderMarkdown converts markdown to tview tags by first rendering the
 // markdown as ANSI and then translating the ANSI to tview tags.
 func (cv *chatView) renderMarkdown(content string) string {
-	// Get the width of the messageList
-	_, _, width, _ := cv.messageList.GetInnerRect()
+	debug.Log("Rendering markdown:\n-----\n%s\n-----", content)
 
 	// Render the markdown content as ANSI
-	rendered := string(markdown.Render(content, width, 0))
+	rendered := markdown.Render(content)
+
+	debug.Log("Rendered:\n-----\n%s\n-----", rendered)
 
 	// Translate the ANSI-escaped content to tview tags
 	rendered = tview.TranslateANSI(rendered)
