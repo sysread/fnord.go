@@ -21,6 +21,7 @@ type tviewRenderer struct {
 
 	// Table rendering
 	columnWidths []int
+	tableHeader  []string
 	currentRow   []string
 	tableRows    [][]string
 	isHeader     bool
@@ -161,156 +162,82 @@ func (r *tviewRenderer) RenderNode(w io.Writer, node *blackfriday.Node, entering
 
 	case blackfriday.Heading:
 		if entering {
-			r.NewLine(w).Header().Style(w)
-
-			for i := 0; i < node.Level; i++ {
-				r.Hash(w)
-			}
-
-			r.Space(w)
+			r.renderHeader(w, node.Level)
 		} else {
-			r.Reset().Style(w).NewLine(w)
+			r.resetStyle(w).NewLine(w)
 		}
 
 	case blackfriday.HorizontalRule:
 		if entering {
-			r.Write(w, "\n────────────────────────────────────────────────────────────────────────────────\n")
+			r.renderHorizontalRule(w)
 		}
 
 	case blackfriday.Emph:
 		if entering {
 			r.Italic().Style(w)
 		} else {
-			r.Reset().Style(w)
+			r.resetStyle(w)
 		}
 
 	case blackfriday.Strong:
 		if entering {
 			r.Bold().Style(w)
 		} else {
-			r.Reset().Style(w)
+			r.resetStyle(w)
 		}
 
 	case blackfriday.Del:
 		if entering {
 			r.StrikeThrough().Style(w)
 		} else {
-			r.Reset().Style(w)
+			r.resetStyle(w)
 		}
 
 	case blackfriday.Text:
 		if r.blockQuoteLevel > 0 {
-			r.BlockQuote().Style(w).Write(w, "  ")
-
-			for i := 0; i < r.blockQuoteLevel; i++ {
-				r.Write(w, "|")
-			}
-
-			r.Write(w, " " + string(node.Literal)).
-				Reset().Style(w)
+			r.renderBlockQuote(w, node.Literal)
 		} else if node.Parent.Type != blackfriday.TableCell {
-			r.Write(w, string(node.Literal))
+			r.renderText(w, node.Literal)
 		}
-
-	case blackfriday.HTMLBlock:
 
 	case blackfriday.CodeBlock:
-		code := string(node.Literal)
-		language := string(node.Info)
-
-		formatted, err := highlightCode(code, language)
-		if err != nil {
-			debug.Log("Error highlighting code: %v", err)
-			formatted = string(code)
-		}
-
-		// First write a subheader with the language info
-		r.NewLine(w).
-			Code().Style(w).
-			// For SOME reason, using 2 spaces here is causing it to line up
-			// with the 4-space-indented code returned by highlightCode.
-			Write(w, fmt.Sprintf("  # vim: ft=%s", language)).
-			Reset().Style(w).
-			NewLine(w)
-
-		// Then write the code
-		r.Write(w, formatted).
-			Reset().Style(w).
-			NewLine(w)
+		r.renderCodeBlock(w, node.Literal, string(node.Info))
 
 	case blackfriday.Code:
-		r.Code().
-			Style(w).
-			Write(w, "`").
-			Write(w, string(node.Literal)).
-			Write(w, "`").
-			Reset().
-			Style(w)
+		r.renderCode(w, node.Literal)
 
 	case blackfriday.Table:
 		if entering {
-			r.columnWidths = nil // Reset column widths for a new table
-			r.tableRows = nil    // Reset table rows for a new table
+			r.startTable()
 		} else {
-			// Render the entire table after determining column widths
-			for _, row := range r.tableRows {
-				for i, cell := range row {
-					if i > 0 {
-						r.Space(w).Write(w, " | ").Space(w) // Separator between columns
-					}
-					fmt.Fprintf(w, "%-*s", r.columnWidths[i], cell) // Pad the cell
-				}
-				r.NewLine(w)
-			}
-			r.columnWidths = nil // Clear the state after the table is rendered
-			r.tableRows = nil    // Clear the state after the table is rendered
+			r.renderTable(w)
 		}
 
 	case blackfriday.TableHead:
-		r.isHeader = entering
+		r.setInHeaderRow(entering)
 
 	case blackfriday.TableRow:
 		if entering {
-			r.currentRow = []string{}
+			r.startRow()
 		} else {
-			// Store the row for later rendering
-			r.tableRows = append(r.tableRows, r.currentRow)
-
-			// Update column widths based on the current row
-			for i, cell := range r.currentRow {
-				if len(r.columnWidths) <= i {
-					r.columnWidths = append(r.columnWidths, len(cell))
-				} else if len(cell) > r.columnWidths[i] {
-					r.columnWidths[i] = len(cell)
-				}
-			}
-			r.currentRow = nil
+			r.finishRow()
 		}
 
 	case blackfriday.TableCell:
-		if entering {
-			// Capture the cell content
-			var cellContent string
-			if node.FirstChild != nil {
-				cellContent = string(node.FirstChild.Literal)
-			}
-
-			// Store the cell content for rendering later
-			r.currentRow = append(r.currentRow, cellContent)
+		if entering && node.FirstChild != nil {
+			r.addTableCell(node.FirstChild.Literal)
 		}
 
 	case blackfriday.Link:
 		if !entering {
-			uri := string(node.Destination)
-
-			r.Write(w, " <").
-				Link().Style(w).
-				Write(w, uri).
-				Reset().Style(w).
-				Write(w, ">")
+			r.renderLink(w, node.Destination)
 		}
 
+	case blackfriday.HTMLBlock:
+		r.renderCode(w, node.Literal)
+
 	case blackfriday.HTMLSpan:
+		r.renderCodeBlock(w, node.Literal, "html")
 
 	case blackfriday.Softbreak:
 
@@ -321,6 +248,181 @@ func (r *tviewRenderer) RenderNode(w io.Writer, node *blackfriday.Node, entering
 	}
 
 	return blackfriday.GoToNext
+}
+
+func (r *tviewRenderer) resetStyle(w io.Writer) *tviewRenderer {
+	r.Reset().Style(w)
+	return r
+}
+
+func (r *tviewRenderer) startTable() *tviewRenderer {
+	r.columnWidths = nil
+	r.tableRows = nil
+	return r
+}
+
+func (r *tviewRenderer) setInHeaderRow(state bool) *tviewRenderer {
+	r.isHeader = state
+	return r
+}
+
+func (r *tviewRenderer) startRow() *tviewRenderer {
+	r.currentRow = []string{}
+	return r
+}
+
+func (r *tviewRenderer) finishRow() *tviewRenderer {
+	// Store the row for later rendering
+	if r.isHeader {
+		r.tableHeader = r.currentRow
+	} else {
+		r.tableRows = append(r.tableRows, r.currentRow)
+	}
+
+	// Update column widths based on the current row
+	for i, cell := range r.currentRow {
+		if len(r.columnWidths) <= i {
+			r.columnWidths = append(r.columnWidths, len(cell))
+		} else if len(cell) > r.columnWidths[i] {
+			r.columnWidths[i] = len(cell)
+		}
+	}
+
+	// Reset the current row
+	r.currentRow = nil
+
+	return r
+}
+
+func (r *tviewRenderer) addTableCell(cell []byte) *tviewRenderer {
+	r.currentRow = append(r.currentRow, string(cell))
+	return r
+}
+
+func (r *tviewRenderer) renderTable(w io.Writer) *tviewRenderer {
+	r.NewLine(w)
+
+	// Render the table header
+	if len(r.tableHeader) > 0 {
+		for i, cell := range r.tableHeader {
+			if i > 0 {
+				r.Space(w).Write(w, "|").Space(w)
+			}
+
+			fmt.Fprintf(w, "%-*s", r.columnWidths[i], cell)
+		}
+
+		r.NewLine(w)
+
+		// Render the separator row
+		for i, width := range r.columnWidths {
+			if i > 0 {
+				r.Write(w, "-|-")
+			}
+
+			fmt.Fprintf(w, "%s", strings.Repeat("-", width))
+		}
+
+		r.NewLine(w)
+	}
+
+	// Render the table rows
+	for _, row := range r.tableRows {
+		for i, cell := range row {
+			if i > 0 {
+				r.Space(w).Write(w, "|").Space(w)
+			}
+
+			fmt.Fprintf(w, "%-*s", r.columnWidths[i], cell)
+		}
+
+		r.NewLine(w)
+	}
+
+	r.NewLine(w)
+
+	r.columnWidths = nil
+	r.tableRows = nil
+
+	return r
+}
+
+func (r *tviewRenderer) renderLink(w io.Writer, uri []byte) *tviewRenderer {
+	r.Write(w, " <").
+		Link().Style(w).
+		Write(w, string(uri)).
+		resetStyle(w).
+		Write(w, ">")
+	return r
+}
+
+func (r *tviewRenderer) renderText(w io.Writer, text []byte) *tviewRenderer {
+	r.Write(w, string(text))
+	return r
+}
+
+func (r *tviewRenderer) renderHorizontalRule(w io.Writer) *tviewRenderer {
+	r.Write(w, "\n────────────────────────────────────────────────────────────────────────────────\n")
+	return r
+}
+
+func (r *tviewRenderer) renderBlockQuote(w io.Writer, text []byte) *tviewRenderer {
+	r.BlockQuote().Style(w).Space(w).Space(w)
+
+	for i := 0; i < r.blockQuoteLevel; i++ {
+		r.Write(w, "|")
+	}
+
+	r.Write(w, " ").renderText(w, text).resetStyle(w)
+
+	return r
+}
+
+func (r *tviewRenderer) renderHeader(w io.Writer, level int) *tviewRenderer {
+	r.NewLine(w).Header().Style(w)
+
+	for i := 0; i < level; i++ {
+		r.Hash(w)
+	}
+
+	r.Space(w)
+	return r
+}
+
+func (r *tviewRenderer) renderCode(w io.Writer, code []byte) *tviewRenderer {
+	r.Code().Style(w).
+		Write(w, "`").
+		Write(w, string(code)).
+		Write(w, "`").
+		Reset().Style(w)
+
+	return r
+}
+
+func (r *tviewRenderer) renderCodeBlock(w io.Writer, code []byte, language string) *tviewRenderer {
+	formatted, err := highlightCode(string(code), language)
+	if err != nil {
+		debug.Log("Error highlighting code: %v", err)
+		formatted = string(code)
+	}
+
+	// First write a subheader with the language info
+	if language != "" {
+		r.NewLine(w).
+			Code().Style(w).
+			// For SOME reason, using 2 spaces here is causing it to line up
+			// with the 4-space-indented code returned by highlightCode.
+			Write(w, fmt.Sprintf("  # vim: ft=%s", language)).
+			Reset().Style(w).
+			NewLine(w)
+	}
+
+	// Then write the code
+	r.Write(w, formatted).
+		Reset().Style(w).
+		NewLine(w)
+
+	return r
 }
 
 // highlightCode highlights code, first converting it to ANSI and then to tview
