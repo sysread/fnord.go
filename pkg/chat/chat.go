@@ -64,25 +64,24 @@ Take the user input and respond ONLY with a very short query string to use RAG t
 `
 
 type Chat struct {
-	context      *context.Context
-	conversation *data.Conversation
+	*data.ConversationRecord
+	context *context.Context
 }
 
 func NewChat(ctx *context.Context) *Chat {
-	conversation := ctx.DataStore.NewConversation()
+	c := ctx.DataStore.NewConversationRecord()
 
-	systemMessage := messages.NewMessage(messages.System, systemChatPrompt)
-	systemMessage.IsHidden = true
-	conversation.AddMessage(systemMessage)
+	systemMessage := messages.NewMessage(messages.System, systemChatPrompt, true)
+	c.AddMessage(systemMessage)
 
 	return &Chat{
-		context:      ctx,
-		conversation: conversation,
+		ConversationRecord: c,
+		context:            ctx,
 	}
 }
 
-func (c *Chat) AddMessage(msg messages.ChatMessage) {
-	c.conversation.AddMessage(msg)
+func (c *Chat) AddMessage(msg messages.Message) {
+	c.ConversationRecord.AddMessage(msg)
 
 	go func() {
 		// If the message is from the assistant, update the conversation
@@ -98,16 +97,12 @@ func (c *Chat) AddMessage(msg messages.ChatMessage) {
 			embedding, _ := c.context.GptClient.GetEmbedding(summary)
 
 			// Store the updated summary and embedding in the struct
-			c.conversation.SetSummary(summary, embedding)
+			c.SetSummary(summary, embedding)
 		}
 
 		// Save the conversation to disk
-		c.conversation.Save()
+		c.Save()
 	}()
-}
-
-func (c *Chat) LastMessage() *messages.ChatMessage {
-	return c.conversation.LastMessage()
 }
 
 func (c *Chat) RequestResponse(onChunkReceived func(string)) {
@@ -116,7 +111,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 	// Add summaries of prior conversations that could help inform the current
 	// conversation. This is done before starting the streaming response so
 	// that the assistant can use the summaries to improve its responses.
-	related, err := c.Search(c.conversation.Transcript(), 5)
+	related, err := c.Search(c.ChatTranscript(), 5)
 	if err != nil {
 		debug.Log("Error searching for related conversations: %v", err)
 	} else {
@@ -129,17 +124,16 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 			fmt.Fprintf(&buffer, "%s\n\n", conversation.Summary)
 		}
 
-		relatedMessage := messages.NewMessage(messages.System, buffer.String())
-		relatedMessage.IsHidden = true
+		relatedMessage := messages.NewMessage(messages.System, buffer.String(), true)
 
-		c.conversation.AddMessage(relatedMessage)
+		c.AddMessage(relatedMessage)
 	}
 
 	// Buffer to collect the streaming response
 	var buf strings.Builder
 
 	// Start the streaming response
-	responseChan := c.context.GptClient.GetCompletionStream(c.conversation.Messages)
+	responseChan := c.context.GptClient.GetCompletionStream(c.Conversation)
 
 	go func() {
 		// Collect the streaming response
@@ -153,7 +147,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 
 		// Finally, add the full response to the conversation. This will
 		// trigger the conversation summary to be updated.
-		msg := messages.NewMessage(messages.Assistant, buf.String())
+		msg := messages.NewMessage(messages.Assistant, buf.String(), false)
 		c.AddMessage(msg)
 
 		done <- true
@@ -163,7 +157,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 }
 
 func (c *Chat) GenerateSummary() (string, error) {
-	userPrompt := c.conversation.Messages.ChatTranscript()
+	userPrompt := c.ChatTranscript()
 	return c.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
 }
 

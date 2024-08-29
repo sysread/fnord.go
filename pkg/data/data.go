@@ -85,11 +85,9 @@ package data
 import (
 	"bufio"
 	"crypto/sha256"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -104,7 +102,9 @@ type DataStore struct {
 	config *config.Config
 }
 
-type Conversation struct {
+type ConversationRecord struct {
+	*messages.Conversation
+
 	DataStore *DataStore
 	Created   time.Time
 	Modified  time.Time
@@ -112,7 +112,6 @@ type Conversation struct {
 	Hash      [32]byte
 	Summary   string
 	Embedding []float32
-	Messages  messages.Conversation
 }
 
 type ConversationIndexEntry struct {
@@ -158,15 +157,15 @@ func (ds *DataStore) embeddingFilePath(uuid string) string {
 	return filepath.Join(ds.conversationDirPath(uuid), "embeddings.json")
 }
 
-func (ds *DataStore) NewConversation() *Conversation {
-	msgs := make([]messages.ChatMessage, 0, 50)
+func (ds *DataStore) NewConversationRecord() *ConversationRecord {
+	c := messages.NewConversation()
 
-	return &Conversation{
-		DataStore: ds,
-		Created:   time.Now(),
-		Modified:  time.Now(),
-		UUID:      uuid.NewString(),
-		Messages:  msgs,
+	return &ConversationRecord{
+		Conversation: c,
+		DataStore:    ds,
+		Created:      time.Now(),
+		Modified:     time.Now(),
+		UUID:         uuid.NewString(),
 	}
 }
 
@@ -203,23 +202,14 @@ func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
 // -----------------------------------------------------------------------------
 
 // AddMessage adds a message to the conversation
-func (c *Conversation) AddMessage(message messages.ChatMessage) {
-	c.Messages = append(c.Messages, message)
+func (c *ConversationRecord) AddMessage(message messages.Message) {
+	c.Conversation.AddMessage(message)
 	c.Modified = time.Now()
-}
-
-// LastMessage returns the last message in the conversation.
-func (c *Conversation) LastMessage() *messages.ChatMessage {
-	if len(c.Messages) == 0 {
-		return nil
-	}
-
-	return &c.Messages[len(c.Messages)-1]
 }
 
 // SetSummary updates the conversation's summary and embedding. Also regenerates
 // the hash of the conversation summary.
-func (c *Conversation) SetSummary(summary string, embedding []float32) {
+func (c *ConversationRecord) SetSummary(summary string, embedding []float32) {
 	c.Summary = summary
 	c.Embedding = embedding
 	c.Hash = sha256.Sum256([]byte(c.Summary))
@@ -227,26 +217,15 @@ func (c *Conversation) SetSummary(summary string, embedding []float32) {
 
 // HasStaleEmbedding returns true if the conversation's embedding is out of
 // sync with its summary.
-func (c *Conversation) HasStaleEmbedding() bool {
+func (c *ConversationRecord) HasStaleEmbedding() bool {
 	hash := sha256.Sum256([]byte(c.Summary))
 	return c.Hash != hash
-}
-
-// Transcript returns a string representation of the conversation.
-func (c *Conversation) Transcript() string {
-	var buf strings.Builder
-
-	for _, message := range c.Messages {
-		buf.WriteString(fmt.Sprintf("%s:\n\n%s\n\n", message.From, message.Content))
-	}
-
-	return buf.String()
 }
 
 // Save updates the summary and embedding, then saves the
 // conversation to disk. The `Conversation`'s `Summary` and `Modified` fields
 // will be updated in place.
-func (c *Conversation) Save() {
+func (c *ConversationRecord) Save() {
 	// Update the index file ($FNORD_HOME/conversations/index.jsonl)
 	if err := c.saveConversationIndexEntry(); err != nil {
 		debug.Log("Failed to save conversation index entry: %v", err)
@@ -270,7 +249,7 @@ func (c *Conversation) Save() {
 //
 // Note that before calling this function, the `updateSummary` function should
 // be called to ensure that the `Summary` and `Modified` fields are up to date.
-func (c *Conversation) saveConversationIndexEntry() error {
+func (c *ConversationRecord) saveConversationIndexEntry() error {
 	conversationsIndex := c.DataStore.conversationsIndex()
 
 	// Open the source file for reading
@@ -344,7 +323,7 @@ func (c *Conversation) saveConversationIndexEntry() error {
 	return nil
 }
 
-func (c *Conversation) saveEmbedding() error {
+func (c *ConversationRecord) saveEmbedding() error {
 	conversationDirPath := c.DataStore.conversationDirPath(c.UUID)
 	originalFilePath := c.DataStore.embeddingFilePath(c.UUID)
 
@@ -390,7 +369,7 @@ func (c *Conversation) saveEmbedding() error {
 // saveConversation saves the conversation to disk. The `Conversation`'s
 // `Messages` field will be written to the conversation file. This method does
 // NOT update the `Modified` field.
-func (c *Conversation) saveConversation() error {
+func (c *ConversationRecord) saveConversation() error {
 	conversationDirPath := c.DataStore.conversationDirPath(c.UUID)
 	originalFilePath := c.DataStore.conversationFilePath(c.UUID)
 
@@ -410,9 +389,11 @@ func (c *Conversation) saveConversation() error {
 	// file with the current message data.
 	for _, message := range c.Messages {
 		jsonData, jsonErr := json.Marshal(message)
+
 		if jsonErr != nil {
 			return jsonErr
 		}
+
 		tempFile.Write(jsonData)
 	}
 

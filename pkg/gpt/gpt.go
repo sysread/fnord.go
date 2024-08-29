@@ -72,7 +72,7 @@ func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
 }
 
-func (c *OpenAIClient) GetCompletionStream(conversation messages.Conversation) chan string {
+func (c *OpenAIClient) GetCompletionStream(conversation *messages.Conversation) chan string {
 	out := make(chan string)
 
 	go func() {

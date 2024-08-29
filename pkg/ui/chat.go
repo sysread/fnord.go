@@ -206,7 +206,7 @@ func (cv *chatView) onSubmit() {
 	// Disable the chat input while the assistant is responding
 	cv.userInput.SetDisabled(true)
 
-	var msgs []messages.ChatMessage
+	var msgs []messages.Message
 	messageText := cv.userInput.GetText()
 
 	// Parse the user message
@@ -218,14 +218,14 @@ func (cv *chatView) onSubmit() {
 			break
 		}
 
-		if fileDoesNotExist, ok := err.(*messages.FileDoesNotExist); ok {
-			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", fileDoesNotExist.FilePath)
+		if messageFileDoesNotExist, ok := err.(*messages.MessageFileDoesNotExist); ok {
+			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", messageFileDoesNotExist.FilePath)
 
 			done := make(chan bool)
 
 			cv.ui.app.QueueUpdateDraw(func() {
 				cv.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
-					messageText = strings.Replace(messageText, "\\f "+fileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
+					messageText = strings.Replace(messageText, "\\f "+messageFileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
 					cv.ui.OpenChat()
 					done <- true
 				})

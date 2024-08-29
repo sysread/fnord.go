@@ -8,92 +8,17 @@ import (
 	"strings"
 
 	"github.com/rivo/tview"
-	openai "github.com/sashabaranov/go-openai"
 )
 
-type Sender string
-
-type ChatMessage struct {
-	From     Sender `json:"from"`
-	IsHidden bool   `json:"is_hidden"`
-	Content  string `json:"content"`
+// trimMessage trims leading and trailing whitespace from a message's content.
+func trimMessage(content string) string {
+	content = strings.TrimLeft(content, " \r\n\t\f")
+	content = strings.TrimRight(content, " \r\n\t\f")
+	return content
 }
 
-type Conversation []ChatMessage
-
-type FileDoesNotExist struct {
-	FilePath string
-}
-
-const (
-	You       Sender = "You"
-	Assistant Sender = "Assistant"
-	System    Sender = "System"
-
-	// OpenAI has a token limit per request. When a file is too large to send
-	// as part of a conversation message, we can split it up into smaller
-	// chunks. 30k is a safe limit, lower than needed to avoid hitting the
-	// token limit.
-	MaxChunkSize = 30_000
-)
-
-func (e *FileDoesNotExist) Error() string {
-	return fmt.Sprintf("file does not exist: %s", e.FilePath)
-}
-
-func NewMessage(from Sender, content string) ChatMessage {
-	return ChatMessage{
-		From:     from,
-		Content:  content,
-		IsHidden: false,
-	}
-}
-
-func (c Conversation) ChatCompletionMessages() []openai.ChatCompletionMessage {
-	messages := []openai.ChatCompletionMessage{}
-
-	for _, message := range c {
-		messages = append(messages, message.ChatCompletionMessage())
-	}
-
-	return messages
-}
-
-func (c Conversation) ChatTranscript() string {
-	transcript := ""
-
-	for _, message := range c {
-		if message.From != System {
-			transcript += fmt.Sprintf("%s: %s\n\n", message.From, message.Content)
-		}
-	}
-
-	return transcript
-}
-
-func (c *Conversation) AddMessage(message ChatMessage) {
-	*c = append(*c, message)
-}
-
-func (m ChatMessage) Role() string {
-	role := openai.ChatMessageRoleUser
-
-	if m.From != You {
-		role = openai.ChatMessageRoleAssistant
-	}
-
-	return role
-}
-
-func (m ChatMessage) ChatCompletionMessage() openai.ChatCompletionMessage {
-	return openai.ChatCompletionMessage{
-		Role:    m.Role(),
-		Content: trimMessage(m.Content),
-	}
-}
-
-func ParseMessage(from Sender, content string) (Conversation, error) {
-	messages := Conversation{}
+func ParseMessage(from Sender, content string) ([]Message, error) {
+	messages := []Message{}
 	scanner := bufio.NewScanner(strings.NewReader(content))
 
 	currentMessage := ""
@@ -106,7 +31,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 			// message buffer.
 			currentMessage = trimMessage(currentMessage)
 			if currentMessage != "" {
-				message := ChatMessage{
+				message := Message{
 					From:     from,
 					Content:  currentMessage,
 					IsHidden: false,
@@ -120,10 +45,10 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 			switch action {
 			case "file":
 				if _, err := os.Stat(remaining); os.IsNotExist(err) {
-					return messages, &FileDoesNotExist{FilePath: remaining}
+					return messages, &MessageFileDoesNotExist{FilePath: remaining}
 				}
 
-				messages = append(messages, ChatMessage{
+				messages = append(messages, Message{
 					From:     from,
 					Content:  fmt.Sprintf("Attached file: %s", remaining),
 					IsHidden: false,
@@ -132,7 +57,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 				chunks := splitFileIntoDigestibleChunks(remaining)
 
 				for idx, part := range chunks {
-					message := ChatMessage{
+					message := Message{
 						From:     from,
 						Content:  fmt.Sprintf("Attached file (%s) part %d:\n\n%s", remaining, idx, part),
 						IsHidden: true,
@@ -142,7 +67,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 				}
 
 			case "exec":
-				messages = append(messages, ChatMessage{
+				messages = append(messages, Message{
 					From:     from,
 					Content:  fmt.Sprintf("Executed command: %s", remaining),
 					IsHidden: false,
@@ -152,7 +77,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 
 				// We want to show the output of the command, so it's not hidden in the UI.
 				for idx, part := range chunks {
-					message := ChatMessage{
+					message := Message{
 						From:     from,
 						Content:  fmt.Sprintf("Attached command output (%s) part %d:\n\n%s", remaining, idx, part),
 						IsHidden: false,
@@ -174,7 +99,7 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 	// Add any remaining message content
 	currentMessage = trimMessage(currentMessage)
 	if currentMessage != "" {
-		message := ChatMessage{
+		message := Message{
 			From:     from,
 			Content:  currentMessage,
 			IsHidden: false,
@@ -192,6 +117,9 @@ func ParseMessage(from Sender, content string) (Conversation, error) {
 	return messages, nil
 }
 
+// getAction checks if the line is an action (e.g. a slash command indicating a
+// file or exec command) and returns the action type and the remaining content
+// of the line.
 func getAction(line string) (bool, string, string) {
 	if strings.HasPrefix(line, "\\f ") {
 		return true, "file", strings.TrimPrefix(line, "\\f ")
@@ -202,12 +130,6 @@ func getAction(line string) (bool, string, string) {
 	}
 
 	return false, "", line
-}
-
-func trimMessage(msg string) string {
-	msg = strings.TrimLeft(msg, " \r\n\t\f")
-	msg = strings.TrimRight(msg, " \r\n\t\f")
-	return msg
 }
 
 // Because OpenAI does not support all of the file types that we might care
@@ -226,6 +148,8 @@ func splitFileIntoDigestibleChunks(filePath string) []string {
 	return splitIntoDigestibleChunks(bufio.NewScanner(file))
 }
 
+// splitExecOutputIntoDigestibleChunks executes a command and splits the output
+// into openai-sized chunks.
 func splitExecOutputIntoDigestibleChunks(command string) []string {
 	cmd := exec.Command("sh", "-c", command)
 	output, err := cmd.CombinedOutput()
@@ -242,6 +166,8 @@ func splitExecOutputIntoDigestibleChunks(command string) []string {
 	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(outputStr)))
 }
 
+// splitIntoDigestibleChunks splits the input into chunks that are smaller than
+// the OpenAI token limit.
 func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
 	parts := []string{}
 
