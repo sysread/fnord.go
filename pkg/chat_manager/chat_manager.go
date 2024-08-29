@@ -63,25 +63,25 @@ const searchQueryPrompt = `
 Take the user input and respond ONLY with a very short query string to use RAG to identify matching entries.
 `
 
-type Chat struct {
-	*data.ConversationRecord
+type ChatManager struct {
+	*data.PersistedConversation
 	context *context.Context
 }
 
-func NewChat(ctx *context.Context) *Chat {
-	c := ctx.DataStore.NewConversationRecord()
+func NewChatManager(ctx *context.Context) *ChatManager {
+	pc := ctx.DataStore.NewPersistedConversation()
 
 	systemMessage := messages.NewMessage(messages.System, systemChatPrompt, true)
-	c.AddMessage(systemMessage)
+	pc.AddMessage(systemMessage)
 
-	return &Chat{
-		ConversationRecord: c,
-		context:            ctx,
+	return &ChatManager{
+		PersistedConversation: pc,
+		context:               ctx,
 	}
 }
 
-func (c *Chat) AddMessage(msg messages.Message) {
-	c.ConversationRecord.AddMessage(msg)
+func (cm *ChatManager) AddMessage(msg messages.Message) {
+	cm.PersistedConversation.AddMessage(msg)
 
 	go func() {
 		// If the message is from the assistant, update the conversation
@@ -91,27 +91,27 @@ func (c *Chat) AddMessage(msg messages.Message) {
 		// messages (e.g., for slash commands).
 		if msg.From == messages.Assistant {
 			// Update the summary of the conversation
-			summary, _ := c.GenerateSummary()
+			summary, _ := cm.GenerateSummary()
 
 			// Using the updated summary, generate a new embedding
-			embedding, _ := c.context.GptClient.GetEmbedding(summary)
+			embedding, _ := cm.context.GptClient.GetEmbedding(summary)
 
 			// Store the updated summary and embedding in the struct
-			c.SetSummary(summary, embedding)
+			cm.SetSummary(summary, embedding)
 		}
 
 		// Save the conversation to disk
-		c.Save()
+		cm.Save()
 	}()
 }
 
-func (c *Chat) RequestResponse(onChunkReceived func(string)) {
+func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	done := make(chan bool)
 
 	// Add summaries of prior conversations that could help inform the current
 	// conversation. This is done before starting the streaming response so
 	// that the assistant can use the summaries to improve its responses.
-	related, err := c.Search(c.ChatTranscript(), 5)
+	related, err := cm.Search(cm.ChatTranscript(), 5)
 	if err != nil {
 		debug.Log("Error searching for related conversations: %v", err)
 	} else {
@@ -126,14 +126,14 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 
 		relatedMessage := messages.NewMessage(messages.System, buffer.String(), true)
 
-		c.AddMessage(relatedMessage)
+		cm.AddMessage(relatedMessage)
 	}
 
 	// Buffer to collect the streaming response
 	var buf strings.Builder
 
 	// Start the streaming response
-	responseChan := c.context.GptClient.GetCompletionStream(c.Conversation)
+	responseChan := cm.context.GptClient.GetCompletionStream(cm.Conversation)
 
 	go func() {
 		// Collect the streaming response
@@ -148,7 +148,7 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 		// Finally, add the full response to the conversation. This will
 		// trigger the conversation summary to be updated.
 		msg := messages.NewMessage(messages.Assistant, buf.String(), false)
-		c.AddMessage(msg)
+		cm.AddMessage(msg)
 
 		done <- true
 	}()
@@ -156,26 +156,26 @@ func (c *Chat) RequestResponse(onChunkReceived func(string)) {
 	<-done
 }
 
-func (c *Chat) GenerateSummary() (string, error) {
-	userPrompt := c.ChatTranscript()
-	return c.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
+func (cm *ChatManager) GenerateSummary() (string, error) {
+	userPrompt := cm.ChatTranscript()
+	return cm.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
 }
 
 // Takes a user's prompt message, uses the fast model to generate a search
 // query from it, converts that to an embedding, and then searches the
 // conversation directory for the most similar conversations.
-func (c *Chat) Search(queryString string, numResults int) ([]data.ConversationIndexEntry, error) {
+func (cm *ChatManager) Search(queryString string, numResults int) ([]data.ConversationIndexEntry, error) {
 	// Generate a search query from the user input
-	query, err := c.context.GptClient.QuickCompletion(searchQueryPrompt, queryString)
+	query, err := cm.context.GptClient.QuickCompletion(searchQueryPrompt, queryString)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate an embedding for the newly generated search query
-	embedding, err := c.context.GptClient.GetEmbedding(query)
+	embedding, err := cm.context.GptClient.GetEmbedding(query)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.context.DataStore.Search(embedding, numResults)
+	return cm.context.DataStore.Search(embedding, numResults)
 }

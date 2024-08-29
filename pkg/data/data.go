@@ -102,7 +102,7 @@ type DataStore struct {
 	config *config.Config
 }
 
-type ConversationRecord struct {
+type PersistedConversation struct {
 	*messages.Conversation
 
 	DataStore *DataStore
@@ -157,10 +157,10 @@ func (ds *DataStore) embeddingFilePath(uuid string) string {
 	return filepath.Join(ds.conversationDirPath(uuid), "embeddings.json")
 }
 
-func (ds *DataStore) NewConversationRecord() *ConversationRecord {
+func (ds *DataStore) NewPersistedConversation() *PersistedConversation {
 	c := messages.NewConversation()
 
-	return &ConversationRecord{
+	return &PersistedConversation{
 		Conversation: c,
 		DataStore:    ds,
 		Created:      time.Now(),
@@ -202,14 +202,14 @@ func (ds *DataStore) ListConversations() ([]ConversationIndexEntry, error) {
 // -----------------------------------------------------------------------------
 
 // AddMessage adds a message to the conversation
-func (c *ConversationRecord) AddMessage(message messages.Message) {
+func (c *PersistedConversation) AddMessage(message messages.Message) {
 	c.Conversation.AddMessage(message)
 	c.Modified = time.Now()
 }
 
 // SetSummary updates the conversation's summary and embedding. Also regenerates
 // the hash of the conversation summary.
-func (c *ConversationRecord) SetSummary(summary string, embedding []float32) {
+func (c *PersistedConversation) SetSummary(summary string, embedding []float32) {
 	c.Summary = summary
 	c.Embedding = embedding
 	c.Hash = sha256.Sum256([]byte(c.Summary))
@@ -217,7 +217,7 @@ func (c *ConversationRecord) SetSummary(summary string, embedding []float32) {
 
 // HasStaleEmbedding returns true if the conversation's embedding is out of
 // sync with its summary.
-func (c *ConversationRecord) HasStaleEmbedding() bool {
+func (c *PersistedConversation) HasStaleEmbedding() bool {
 	hash := sha256.Sum256([]byte(c.Summary))
 	return c.Hash != hash
 }
@@ -225,7 +225,7 @@ func (c *ConversationRecord) HasStaleEmbedding() bool {
 // Save updates the summary and embedding, then saves the
 // conversation to disk. The `Conversation`'s `Summary` and `Modified` fields
 // will be updated in place.
-func (c *ConversationRecord) Save() {
+func (c *PersistedConversation) Save() {
 	// Update the index file ($FNORD_HOME/conversations/index.jsonl)
 	if err := c.saveConversationIndexEntry(); err != nil {
 		debug.Log("Failed to save conversation index entry: %v", err)
@@ -249,7 +249,7 @@ func (c *ConversationRecord) Save() {
 //
 // Note that before calling this function, the `updateSummary` function should
 // be called to ensure that the `Summary` and `Modified` fields are up to date.
-func (c *ConversationRecord) saveConversationIndexEntry() error {
+func (c *PersistedConversation) saveConversationIndexEntry() error {
 	conversationsIndex := c.DataStore.conversationsIndex()
 
 	// Open the source file for reading
@@ -323,7 +323,7 @@ func (c *ConversationRecord) saveConversationIndexEntry() error {
 	return nil
 }
 
-func (c *ConversationRecord) saveEmbedding() error {
+func (c *PersistedConversation) saveEmbedding() error {
 	conversationDirPath := c.DataStore.conversationDirPath(c.UUID)
 	originalFilePath := c.DataStore.embeddingFilePath(c.UUID)
 
@@ -369,7 +369,7 @@ func (c *ConversationRecord) saveEmbedding() error {
 // saveConversation saves the conversation to disk. The `Conversation`'s
 // `Messages` field will be written to the conversation file. This method does
 // NOT update the `Modified` field.
-func (c *ConversationRecord) saveConversation() error {
+func (c *PersistedConversation) saveConversation() error {
 	conversationDirPath := c.DataStore.conversationDirPath(c.UUID)
 	originalFilePath := c.DataStore.conversationFilePath(c.UUID)
 

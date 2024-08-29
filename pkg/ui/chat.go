@@ -11,7 +11,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/sysread/textsel"
 
-	"github.com/sysread/fnord/pkg/chat"
+	"github.com/sysread/fnord/pkg/chat_manager"
 	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/markdown"
 	"github.com/sysread/fnord/pkg/messages"
@@ -29,8 +29,8 @@ escape closes
 type chatView struct {
 	*tview.Frame
 
-	ui   *UI
-	chat *chat.Chat
+	ui      *UI
+	chatMgr *chat.ChatManager
 
 	container *tview.Flex
 
@@ -47,8 +47,8 @@ type chatView struct {
 
 func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
-		ui:   ui,
-		chat: chat.NewChat(ui.Context),
+		ui:      ui,
+		chatMgr: chat.NewChatManager(ui.Context),
 	}
 
 	cv.container = tview.NewFlex().
@@ -183,7 +183,7 @@ func (cv *chatView) FocusMessageList() {
 
 func (cv *chatView) ToggleReceiving() {
 	if cv.isReceiving {
-		lastMessage := cv.chat.LastMessage()
+		lastMessage := cv.chatMgr.LastMessage()
 		if lastMessage != nil {
 			cv.container.RemoveItem(cv.receivingBuffer)
 			cv.container.AddItem(cv.chatFlex, 0, 1, false)
@@ -248,7 +248,7 @@ func (cv *chatView) onSubmit() {
 		if !msg.IsHidden {
 			content := cv.renderMarkdown(msg.Content)
 			cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
-			cv.chat.AddMessage(msg)
+			cv.chatMgr.AddMessage(msg)
 			cv.messageList.ScrollToEnd()
 			cv.messageList.MoveToLastLine()
 		}
@@ -257,7 +257,7 @@ func (cv *chatView) onSubmit() {
 	// Get the assistant's response
 	cv.ToggleReceiving()
 	cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
-	cv.chat.RequestResponse(func(chunk string) {
+	cv.chatMgr.RequestResponse(func(chunk string) {
 		// Append the assistant's response to the chat view
 		cv.queueAppendText(chunk)
 	})
