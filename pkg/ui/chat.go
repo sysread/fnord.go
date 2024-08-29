@@ -26,11 +26,6 @@ Slash Commands
 escape closes
 `
 
-type chatInput struct {
-	chatView *chatView
-	*tview.TextArea
-}
-
 type chatView struct {
 	*tview.Frame
 
@@ -41,7 +36,7 @@ type chatView struct {
 
 	chatFlex    *tview.Flex
 	messageList *textsel.TextSel
-	userInput   *chatInput
+	userInput   *tview.TextArea
 
 	receivingBuffer *tview.TextView
 	isReceiving     bool
@@ -152,12 +147,8 @@ func (cv *chatView) toggleHelp() {
 
 // Builds the chatInput component, which is a text area that captures user
 // input and sends it to the assistant when the user presses Ctrl+Space.
-func (cv *chatView) newChatInput() *chatInput {
-	chatInput := &chatInput{
-		chatView: cv,
-		TextArea: tview.NewTextArea(),
-	}
-
+func (cv *chatView) newChatInput() *tview.TextArea {
+	chatInput := tview.NewTextArea()
 	chatInput.SetBorder(true)
 	chatInput.SetTitle("Type your message here")
 
@@ -167,7 +158,7 @@ func (cv *chatView) newChatInput() *chatInput {
 		}
 
 		if event.Key() == tcell.KeyCtrlSpace {
-			go chatInput.onSubmit()
+			go cv.onSubmit()
 
 			// Return nil to indicate the event has been handled
 			return nil
@@ -211,12 +202,12 @@ func (cv *chatView) ToggleReceiving() {
 	}
 }
 
-func (ci *chatInput) onSubmit() {
+func (cv *chatView) onSubmit() {
 	// Disable the chat input while the assistant is responding
-	ci.SetDisabled(true)
+	cv.userInput.SetDisabled(true)
 
 	var msgs []messages.ChatMessage
-	messageText := ci.GetText()
+	messageText := cv.userInput.GetText()
 
 	// Parse the user message
 	for {
@@ -232,10 +223,10 @@ func (ci *chatInput) onSubmit() {
 
 			done := make(chan bool)
 
-			ci.chatView.ui.app.QueueUpdateDraw(func() {
-				ci.chatView.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
+			cv.ui.app.QueueUpdateDraw(func() {
+				cv.ui.OpenFilePicker(prompt, ".", func(replacementFilePath string) {
 					messageText = strings.Replace(messageText, "\\f "+fileDoesNotExist.FilePath, "\\f "+replacementFilePath, 1)
-					ci.chatView.ui.OpenChat()
+					cv.ui.OpenChat()
 					done <- true
 				})
 			})
@@ -245,38 +236,38 @@ func (ci *chatInput) onSubmit() {
 	}
 
 	// Clear the chat input after the user has sent the message
-	ci.SetText("", false)
+	cv.userInput.SetText("", false)
 
 	if len(msgs) == 0 {
-		ci.SetDisabled(false)
+		cv.userInput.SetDisabled(false)
 		return
 	}
 
 	// Add the parsed user messages to the chat view and conversation.
 	for _, msg := range msgs {
 		if !msg.IsHidden {
-			content := ci.chatView.renderMarkdown(msg.Content)
-			ci.chatView.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
-			ci.chatView.chat.AddMessage(msg)
-			ci.chatView.messageList.ScrollToEnd()
-			ci.chatView.messageList.MoveToLastLine()
+			content := cv.renderMarkdown(msg.Content)
+			cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
+			cv.chat.AddMessage(msg)
+			cv.messageList.ScrollToEnd()
+			cv.messageList.MoveToLastLine()
 		}
 	}
 
 	// Get the assistant's response
-	ci.chatView.ToggleReceiving()
-	ci.chatView.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
-	ci.chatView.chat.RequestResponse(func(chunk string) {
+	cv.ToggleReceiving()
+	cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+	cv.chat.RequestResponse(func(chunk string) {
 		// Append the assistant's response to the chat view
-		ci.chatView.queueAppendText(chunk)
+		cv.queueAppendText(chunk)
 	})
 
 	// Now that the response is complete, append a few newlines to separate it
 	// from the next user message and scroll to the end of the chat view.
-	ci.chatView.ToggleReceiving()
+	cv.ToggleReceiving()
 
 	// Re-enable the chat input
-	ci.SetDisabled(false)
+	cv.userInput.SetDisabled(false)
 }
 
 // Appends text to the chat view.
