@@ -9,6 +9,7 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 
 	"github.com/sysread/fnord/pkg/config"
+	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/messages"
 )
 
@@ -49,6 +50,7 @@ func (c *OpenAIClient) QuickCompletion(systemPrompt string, userPrompt string) (
 
 	if err != nil {
 		errorMessage := fmt.Sprintf("Failed to get completion: %v", err)
+		debug.Log("GPT: %s", errorMessage)
 		return errorMessage, err
 	}
 
@@ -66,6 +68,7 @@ func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string
 
 	if err != nil {
 		errorMessage := fmt.Sprintf("Failed to get completion: %v", err)
+		debug.Log("GPT: %s", errorMessage)
 		return errorMessage, err
 	}
 
@@ -86,7 +89,9 @@ func (c *OpenAIClient) GetCompletionStream(conversation *messages.Conversation) 
 		)
 
 		if err != nil {
-			fmt.Printf("Failed to get completion stream: %v\n", err)
+			errorMessage := fmt.Sprintf("Failed to get completion stream: %v", err)
+			debug.Log("GPT: %s", errorMessage)
+			out <- fmt.Sprintf("[red:-:-]%s[-:-:-]", errorMessage)
 			close(out)
 			return
 		}
@@ -128,7 +133,9 @@ func (c *OpenAIClient) GetEmbedding(text string) ([]float32, error) {
 
 	response, err := c.client.CreateEmbeddings(context.Background(), request)
 	if err != nil {
-		return nil, fmt.Errorf("error generating embeddings: %w", err)
+		errorMessage := fmt.Sprintf("Failed to get embeddings: %v", err)
+		debug.Log("GPT: %s", errorMessage)
+		return nil, err
 	}
 
 	return response.Data[0].Embedding, nil

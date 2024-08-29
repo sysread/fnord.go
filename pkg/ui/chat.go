@@ -12,7 +12,6 @@ import (
 	"github.com/sysread/textsel"
 
 	"github.com/sysread/fnord/pkg/chat_manager"
-	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/markdown"
 	"github.com/sysread/fnord/pkg/messages"
 )
@@ -211,13 +210,15 @@ func (cv *chatView) onSubmit() {
 
 	// Parse the user message
 	for {
-		parsed, err := chat_manager.ParseMessage(messages.You, messageText)
+		parsed, err := chat_manager.ParseMessage(messageText)
 
 		if err == nil {
 			msgs = parsed
 			break
 		}
 
+		// If the error is a MessageFileDoesNotExist, prompt the user to select
+		// a replacement file that *does* exist.
 		if messageFileDoesNotExist, ok := err.(*chat_manager.MessageFileDoesNotExist); ok {
 			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", messageFileDoesNotExist.FilePath)
 
@@ -248,10 +249,11 @@ func (cv *chatView) onSubmit() {
 		if !msg.IsHidden {
 			content := cv.renderMarkdown(msg.Content)
 			cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
-			cv.chatMgr.AddMessage(msg)
-			cv.messageList.ScrollToEnd()
-			cv.messageList.MoveToLastLine()
 		}
+
+		cv.chatMgr.AddMessage(msg)
+		cv.messageList.ScrollToEnd()
+		cv.messageList.MoveToLastLine()
 	}
 
 	// Get the assistant's response
@@ -288,12 +290,8 @@ func (cv *chatView) queueAppendText(text string) {
 // renderMarkdown converts markdown to tview tags by first rendering the
 // markdown as ANSI and then translating the ANSI to tview tags.
 func (cv *chatView) renderMarkdown(content string) string {
-	debug.Log("Rendering markdown:\n-----\n%s\n-----", content)
-
 	// Render the markdown content as ANSI
 	rendered := markdown.Render(content)
-
-	debug.Log("Rendered:\n-----\n%s\n-----", rendered)
 
 	// Translate the ANSI-escaped content to tview tags
 	rendered = tview.TranslateANSI(rendered)

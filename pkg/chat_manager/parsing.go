@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/rivo/tview"
 
 	"github.com/sysread/fnord/pkg/messages"
@@ -29,9 +30,14 @@ func (e *MessageFileDoesNotExist) Error() string {
 	return fmt.Sprintf("file does not exist: %s", e.FilePath)
 }
 
-func ParseMessage(from messages.Sender, content string) ([]messages.Message, error) {
+// ParseMessage parses a `User` message, generating messages for file and exec
+// slash commands. The content of the message is split into messages according
+// to the OpenAI token limit. The result is a list of messages that can be sent
+// to OpenAI.
+func ParseMessage(content string) ([]messages.Message, error) {
 	msgList := []messages.Message{}
 	scanner := bufio.NewScanner(strings.NewReader(content))
+	from := messages.You
 
 	currentMessage := ""
 	for scanner.Scan() {
@@ -50,17 +56,20 @@ func ParseMessage(from messages.Sender, content string) ([]messages.Message, err
 			// Now process the action
 			switch action {
 			case "file":
-				if _, err := os.Stat(remaining); os.IsNotExist(err) {
-					return msgList, &MessageFileDoesNotExist{FilePath: remaining}
-				}
+				// Expand wildcards
+				matches, err := doublestar.FilepathGlob(remaining)
+                if err != nil || len(matches) == 0 {
+                    return msgList, &MessageFileDoesNotExist{FilePath: remaining}
+                }
 
-				msgList = append(msgList, messages.NewMessage(from, fmt.Sprintf("Attached file: %s", remaining), false))
-
-				chunks := splitFileIntoDigestibleChunks(remaining)
-
-				for idx, part := range chunks {
-					content := fmt.Sprintf("Attached file (%s) part %d:\n\n%s", remaining, idx, part)
-					msgList = append(msgList, messages.NewMessage(from, content, true))
+				// Process each matching file
+				for _, match := range matches {
+					chunks := splitFileIntoDigestibleChunks(match)
+					msgList = append(msgList, messages.NewMessage(from, fmt.Sprintf("Attached file: %s (in %d parts)", match, len(chunks)), false))
+					for idx, part := range chunks {
+						content := fmt.Sprintf("Attached file (%s) part %d:\n\n%s", match, idx, part)
+						msgList = append(msgList, messages.NewMessage(from, content, true))
+					}
 				}
 
 			case "exec":
@@ -148,3 +157,4 @@ func splitExecOutputIntoDigestibleChunks(command string) []string {
 
 	return util.Chunkify(bufio.NewScanner(strings.NewReader(outputStr)), MaxChunkSize)
 }
+

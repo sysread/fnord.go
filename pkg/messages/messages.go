@@ -58,7 +58,7 @@ func NewMessage(from Sender, content string, isHidden bool) Message {
 	return Message{
 		From:     from,
 		Content:  util.TrimMessage(content),
-		IsHidden: false,
+		IsHidden: isHidden,
 	}
 }
 
