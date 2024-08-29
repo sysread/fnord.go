@@ -5,27 +5,9 @@ import (
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
+
+	"github.com/sysread/fnord/pkg/util"
 )
-
-// OpenAI has a token limit per request. When a file is too large to send as
-// part of a conversation message, we can split it up into smaller chunks. 30k
-// is a safe limit, lower than needed to avoid hitting the token limit.
-const MaxChunkSize = 30_000
-
-//------------------------------------------------------------------------------
-// MessageFileDoesNotExist
-//------------------------------------------------------------------------------
-
-// MessageFileDoesNotExist is an error type that is returned when a file
-// referenced in a slash command (e.g., `\f`) does not exist.
-type MessageFileDoesNotExist struct {
-	FilePath string
-}
-
-// Error returns the error message for a MessageFileDoesNotExist error.
-func (e *MessageFileDoesNotExist) Error() string {
-	return fmt.Sprintf("file does not exist: %s", e.FilePath)
-}
 
 //------------------------------------------------------------------------------
 // Sender
@@ -75,7 +57,7 @@ type Message struct {
 func NewMessage(from Sender, content string, isHidden bool) Message {
 	return Message{
 		From:     from,
-		Content:  trimMessage(content),
+		Content:  util.TrimMessage(content),
 		IsHidden: false,
 	}
 }
@@ -99,7 +81,7 @@ func (m Message) Role() string {
 func (m Message) ToChatCompletionMessage() openai.ChatCompletionMessage {
 	return openai.ChatCompletionMessage{
 		Role:    m.Role(),
-		Content: trimMessage(m.Content),
+		Content: util.TrimMessage(m.Content),
 	}
 }
 

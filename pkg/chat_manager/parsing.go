@@ -1,4 +1,4 @@
-package messages
+package chat_manager
 
 import (
 	"bufio"
@@ -8,17 +8,29 @@ import (
 	"strings"
 
 	"github.com/rivo/tview"
+
+	"github.com/sysread/fnord/pkg/messages"
+	"github.com/sysread/fnord/pkg/util"
 )
 
-// trimMessage trims leading and trailing whitespace from a message's content.
-func trimMessage(content string) string {
-	content = strings.TrimLeft(content, " \r\n\t\f")
-	content = strings.TrimRight(content, " \r\n\t\f")
-	return content
+// OpenAI has a token limit per request. When a file is too large to send as
+// part of a conversation message, we can split it up into smaller chunks. 30k
+// is a safe limit, lower than needed to avoid hitting the token limit.
+const MaxChunkSize = 30_000
+
+// MessageFileDoesNotExist is an error type that is returned when a file
+// referenced in a slash command (e.g., `\f`) does not exist.
+type MessageFileDoesNotExist struct {
+	FilePath string
 }
 
-func ParseMessage(from Sender, content string) ([]Message, error) {
-	messages := []Message{}
+// Error returns the error message for a MessageFileDoesNotExist error.
+func (e *MessageFileDoesNotExist) Error() string {
+	return fmt.Sprintf("file does not exist: %s", e.FilePath)
+}
+
+func ParseMessage(from messages.Sender, content string) ([]messages.Message, error) {
+	msgList := []messages.Message{}
 	scanner := bufio.NewScanner(strings.NewReader(content))
 
 	currentMessage := ""
@@ -29,15 +41,9 @@ func ParseMessage(from Sender, content string) ([]Message, error) {
 		if isAction {
 			// Any built up text is a message. Add it and reset the current
 			// message buffer.
-			currentMessage = trimMessage(currentMessage)
+			currentMessage = util.TrimMessage(currentMessage)
 			if currentMessage != "" {
-				message := Message{
-					From:     from,
-					Content:  currentMessage,
-					IsHidden: false,
-				}
-
-				messages = append(messages, message)
+				msgList = append(msgList, messages.NewMessage(from, currentMessage, false))
 				currentMessage = ""
 			}
 
@@ -45,45 +51,28 @@ func ParseMessage(from Sender, content string) ([]Message, error) {
 			switch action {
 			case "file":
 				if _, err := os.Stat(remaining); os.IsNotExist(err) {
-					return messages, &MessageFileDoesNotExist{FilePath: remaining}
+					return msgList, &MessageFileDoesNotExist{FilePath: remaining}
 				}
 
-				messages = append(messages, Message{
-					From:     from,
-					Content:  fmt.Sprintf("Attached file: %s", remaining),
-					IsHidden: false,
-				})
+				msgList = append(msgList, messages.NewMessage(from, fmt.Sprintf("Attached file: %s", remaining), false))
 
 				chunks := splitFileIntoDigestibleChunks(remaining)
 
 				for idx, part := range chunks {
-					message := Message{
-						From:     from,
-						Content:  fmt.Sprintf("Attached file (%s) part %d:\n\n%s", remaining, idx, part),
-						IsHidden: true,
-					}
-
-					messages = append(messages, message)
+					content := fmt.Sprintf("Attached file (%s) part %d:\n\n%s", remaining, idx, part)
+					msgList = append(msgList, messages.NewMessage(from, content, true))
 				}
 
 			case "exec":
-				messages = append(messages, Message{
-					From:     from,
-					Content:  fmt.Sprintf("Executed command: %s", remaining),
-					IsHidden: false,
-				})
+				content := fmt.Sprintf("Executed command: %s", remaining)
+				msgList = append(msgList, messages.NewMessage(from, content, false))
 
 				chunks := splitExecOutputIntoDigestibleChunks(remaining)
 
 				// We want to show the output of the command, so it's not hidden in the UI.
 				for idx, part := range chunks {
-					message := Message{
-						From:     from,
-						Content:  fmt.Sprintf("Attached command output (%s) part %d:\n\n%s", remaining, idx, part),
-						IsHidden: false,
-					}
-
-					messages = append(messages, message)
+					content := fmt.Sprintf("Attached command output (%s) part %d:\n\n%s", remaining, idx, part)
+					msgList = append(msgList, messages.NewMessage(from, content, false))
 				}
 
 			default:
@@ -97,24 +86,18 @@ func ParseMessage(from Sender, content string) ([]Message, error) {
 	}
 
 	// Add any remaining message content
-	currentMessage = trimMessage(currentMessage)
+	currentMessage = util.TrimMessage(currentMessage)
 	if currentMessage != "" {
-		message := Message{
-			From:     from,
-			Content:  currentMessage,
-			IsHidden: false,
-		}
-
-		messages = append(messages, message)
+		msgList = append(msgList, messages.NewMessage(from, currentMessage, false))
 		currentMessage = ""
 	}
 
 	// Check for errors during scanning
 	if err := scanner.Err(); err != nil {
-		return messages, err
+		return msgList, err
 	}
 
-	return messages, nil
+	return msgList, nil
 }
 
 // getAction checks if the line is an action (e.g. a slash command indicating a
@@ -145,7 +128,7 @@ func splitFileIntoDigestibleChunks(filePath string) []string {
 
 	defer file.Close()
 
-	return splitIntoDigestibleChunks(bufio.NewScanner(file))
+	return util.Chunkify(bufio.NewScanner(file), MaxChunkSize)
 }
 
 // splitExecOutputIntoDigestibleChunks executes a command and splits the output
@@ -163,38 +146,5 @@ func splitExecOutputIntoDigestibleChunks(command string) []string {
 	// Convert any ANSI escape codes to tview tags
 	outputStr := tview.TranslateANSI(string(output))
 
-	return splitIntoDigestibleChunks(bufio.NewScanner(strings.NewReader(outputStr)))
-}
-
-// splitIntoDigestibleChunks splits the input into chunks that are smaller than
-// the OpenAI token limit.
-func splitIntoDigestibleChunks(scanner *bufio.Scanner) []string {
-	parts := []string{}
-
-	scanner.Split(bufio.ScanRunes)
-
-	var buffer strings.Builder
-	currentSize := 0
-
-	for scanner.Scan() {
-		runeText := scanner.Text()
-		runeSize := len([]byte(runeText))
-
-		// If adding this rune exceeds the max chunk size, start a new chunk
-		if currentSize+runeSize > MaxChunkSize {
-			parts = append(parts, buffer.String())
-			buffer.Reset()
-			currentSize = 0
-		}
-
-		buffer.WriteString(runeText)
-		currentSize += runeSize
-	}
-
-	// Add any remaining runes to the final chunk
-	if buffer.Len() > 0 {
-		parts = append(parts, buffer.String())
-	}
-
-	return parts
+	return util.Chunkify(bufio.NewScanner(strings.NewReader(outputStr)), MaxChunkSize)
 }

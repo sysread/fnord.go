@@ -30,7 +30,7 @@ type chatView struct {
 	*tview.Frame
 
 	ui      *UI
-	chatMgr *chat.ChatManager
+	chatMgr *chat_manager.ChatManager
 
 	container *tview.Flex
 
@@ -48,7 +48,7 @@ type chatView struct {
 func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
 		ui:      ui,
-		chatMgr: chat.NewChatManager(ui.Context),
+		chatMgr: chat_manager.NewChatManager(ui.Context),
 	}
 
 	cv.container = tview.NewFlex().
@@ -211,14 +211,14 @@ func (cv *chatView) onSubmit() {
 
 	// Parse the user message
 	for {
-		parsed, err := messages.ParseMessage(messages.You, messageText)
+		parsed, err := chat_manager.ParseMessage(messages.You, messageText)
 
 		if err == nil {
 			msgs = parsed
 			break
 		}
 
-		if messageFileDoesNotExist, ok := err.(*messages.MessageFileDoesNotExist); ok {
+		if messageFileDoesNotExist, ok := err.(*chat_manager.MessageFileDoesNotExist); ok {
 			prompt := fmt.Sprintf("File '%s' not found! Please select the file you intended.", messageFileDoesNotExist.FilePath)
 
 			done := make(chan bool)
