@@ -1,3 +1,2 @@
-- consolidate "message" stuff
 - embedding service for directories, possibly tied to "box"
-- use threads instead of chat completions because even when files are split they are treated as a single message
+- visual format bug in textsel
