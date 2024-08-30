@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
-	"github.com/sysread/fnord/pkg/debug"
 )
 
 const embeddingsModel = "text-embedding-3-large"

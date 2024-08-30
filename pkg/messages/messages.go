@@ -76,15 +76,6 @@ func (m Message) Role() string {
 	}
 }
 
-// ChatCompletionMessage returns the message as an
-// `openai.ChatCompletionMessage`.
-func (m Message) ToChatCompletionMessage() openai.ChatCompletionMessage {
-	return openai.ChatCompletionMessage{
-		Role:    m.Role(),
-		Content: util.TrimMessage(m.Content),
-	}
-}
-
 //------------------------------------------------------------------------------
 // Conversation
 //------------------------------------------------------------------------------
@@ -113,19 +104,6 @@ func (c *Conversation) LastMessage() *Message {
 	}
 
 	return &c.Messages[len(c.Messages)-1]
-}
-
-// ChatCompletionMessages returns the conversation's messages as a slice of
-// OpenAI chat completion messages, appropriate to be used as an argument to
-// `openai.CreateChatCompletion`.
-func (c *Conversation) ChatCompletionMessages() []openai.ChatCompletionMessage {
-	completionMessages := make([]openai.ChatCompletionMessage, len(c.Messages))
-
-	for i, message := range c.Messages {
-		completionMessages[i] = message.ToChatCompletionMessage()
-	}
-
-	return completionMessages
 }
 
 // ChatTranscript returns the conversation's messages as a formatted string

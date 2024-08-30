@@ -151,7 +151,7 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 // Generates a summary of the conversation transcript using the fast model.
 func (cm *ChatManager) GenerateSummary() (string, error) {
 	userPrompt := cm.ChatTranscript()
-	return cm.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)
+	return cm.context.GptClient.GetCompletion(systemSummaryPrompt, userPrompt)
 }
 
 // Takes a user's prompt message, uses the fast model to generate a search
@@ -159,7 +159,7 @@ func (cm *ChatManager) GenerateSummary() (string, error) {
 // conversation directory for the most similar conversations.
 func (cm *ChatManager) Search(queryString string, numResults int) ([]data.ConversationIndexEntry, error) {
 	// Generate a search query from the user input
-	query, err := cm.context.GptClient.QuickCompletion(searchQueryPrompt, queryString)
+	query, err := cm.context.GptClient.GetCompletion(searchQueryPrompt, queryString)
 	if err != nil {
 		return nil, err
 	}

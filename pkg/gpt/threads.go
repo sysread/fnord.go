@@ -9,6 +9,7 @@ import (
 )
 
 const threadsApiUri = apiBaseUri + "/threads"
+const threadModel = "gpt-4o"
 
 // Represents the response body of a streaming request.
 type threadResponse struct {
