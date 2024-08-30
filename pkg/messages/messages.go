@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	openai "github.com/sashabaranov/go-openai"
-
 	"github.com/sysread/fnord/pkg/util"
 )
 
@@ -62,18 +60,8 @@ func NewMessage(from Sender, content string, isHidden bool) Message {
 	}
 }
 
-// Returns the openai Role of the message.
-func (m Message) Role() string {
-	switch m.From {
-	case You:
-		return openai.ChatMessageRoleUser
-	case Assistant:
-		return openai.ChatMessageRoleAssistant
-	case System:
-		fallthrough
-	default:
-		return openai.ChatMessageRoleUser
-	}
+func (m *Message) IsUserMessage() bool {
+	return m.From == You
 }
 
 //------------------------------------------------------------------------------

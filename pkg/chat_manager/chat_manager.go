@@ -59,7 +59,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 
 	// Add user messages to the thread. Assistant messages are added
 	// automatically during the thread run.
-	if msg.Role() == "user" {
+	if msg.IsUserMessage() {
 		err := cm.context.GptClient.AddMessage(cm.threadID, msg.Content)
 		if err != nil {
 			debug.Log("Error adding message to thread: %v", err)
