@@ -10,45 +10,6 @@ import (
 	"github.com/sysread/fnord/pkg/messages"
 )
 
-const systemChatPrompt = `
-In your role as a programming assistant, it is crucial that you thoroughly understand the context and all related components of the software or scripts being discussed. If an explanation or analysis is given based on only part of a multi-file project or script, you will need to actively identify and request access to any additional files or parts of the script that are referenced within the code provided by the user but not yet shared with you. These additional files or scripts may contain critical information that could change your analysis or affect the accuracy of your explanations and code assistance.
-
-When assisting with troubleshooting code, explaining how code works, or writing code for the user, always confirm that you have access to all necessary pieces of the project by doing the following:
-
-  1. Clearly state any dependencies, referenced files, or external scripts that are mentioned in the code.
-  2. Promptly request access to these items if they are not already provided, specifying tersely exactly what you need in order to proceed effectively.
-  3. Once provided, integrate these additional components into your analysis to ensure completeness and accuracy.
-
-It is imperative that you maintain focus on the user's primary goal. Because you have a limited context window, restate the goal at the outset of each response. This should almost always be identical from message to message in order to ensure that the original goal remains our focus during the conversation. NEVER change this from message to message unless the user explicitly
-asks you to.
-
-NEVER reply with the entire file unless explicitly asked. Instead, walk through each individual change, step by step, highlighting the changed code and explaining the changes in line.
-
-For each interaction, format your response using the template:
-
-# Goal
-
-[restate the ORIGINAL goal for the conversation]
-
-# Topic
-
-[your understanding of the user's current needs]
-
-# Response
-
-[your analysis/response]
-
-# Code changes
-
-[list individual changes, noting file and location, explaining each individually OR "- N/A"]
-
-# Missing files
-[list any additional files needed for context as a markdown list OR "- N/A"]
-
-# Commands to run
-[list any commands you want the user to run to assist in your analysis OR "- N/A"]
-`
-
 const systemSummaryPrompt = `
 Your job is to summarize a conversation.
 It is essential that you identify all significant facts in the conversation transcript.
@@ -63,16 +24,17 @@ const searchQueryPrompt = `
 Take the user input and respond ONLY with a very short query string to use RAG to identify matching entries.
 `
 
+// ChatManager manages a conversation and provides methods for interacting with
+// the conversation.
 type ChatManager struct {
 	*data.PersistedConversation
-	context *context.Context
+	context  *context.Context
+	threadID string
 }
 
+// NewChatManager creates a new ChatManager instance.
 func NewChatManager(ctx *context.Context) *ChatManager {
 	pc := ctx.DataStore.NewPersistedConversation()
-
-	systemMessage := messages.NewMessage(messages.System, systemChatPrompt, true)
-	pc.AddMessage(systemMessage)
 
 	return &ChatManager{
 		PersistedConversation: pc,
@@ -80,8 +42,30 @@ func NewChatManager(ctx *context.Context) *ChatManager {
 	}
 }
 
+// AddMessage adds a message to the conversation and persists the conversation.
 func (cm *ChatManager) AddMessage(msg messages.Message) {
 	cm.PersistedConversation.AddMessage(msg)
+
+	// Create the thread if it doesn't exist yet
+	if cm.threadID == "" {
+		threadID, err := cm.context.GptClient.CreateThread()
+		if err != nil {
+			debug.Log("Error creating thread: %v", err)
+			return
+		}
+
+		cm.threadID = threadID
+	}
+
+	// Add user messages to the thread. Assistant messages are added
+	// automatically during the thread run.
+	if msg.Role() == "user" {
+		err := cm.context.GptClient.AddMessage(cm.threadID, msg.Content)
+		if err != nil {
+			debug.Log("Error adding message to thread: %v", err)
+			return
+		}
+	}
 
 	go func() {
 		// If the message is from the assistant, update the conversation
@@ -105,6 +89,8 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 	}()
 }
 
+// RequestResponse sends the user's input to the assistant and processes the
+// response.
 func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	done := make(chan bool)
 
@@ -133,9 +119,14 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	var buf strings.Builder
 
 	// Start the streaming response
-	msgList := cm.Conversation.ChatCompletionMessages()
-	responseChan := cm.context.GptClient.GetCompletionStream(msgList)
+	responseChan, err := cm.context.GptClient.RunThread(cm.threadID)
+	if err != nil {
+		debug.Log("Error starting response stream: %v", err)
+		return
+	}
 
+	// Start a goroutine to collect the streaming response and send it to the
+	// caller-supplied callback function.
 	go func() {
 		// Collect the streaming response
 		for chunk := range responseChan {
@@ -157,6 +148,7 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	<-done
 }
 
+// Generates a summary of the conversation transcript using the fast model.
 func (cm *ChatManager) GenerateSummary() (string, error) {
 	userPrompt := cm.ChatTranscript()
 	return cm.context.GptClient.QuickCompletion(systemSummaryPrompt, userPrompt)

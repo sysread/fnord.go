@@ -2,18 +2,18 @@ package gpt
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
-
-	"github.com/sysread/fnord/pkg/debug"
-	"github.com/sysread/fnord/pkg/messages"
 )
 
-const apiBaseUri = "https://api.openai.com/v1"
+const threadsApiUri = apiBaseUri + "/threads"
+
+// Represents the response body of a streaming request.
+type threadResponse struct {
+	Delta threadStreamingResponseDelta `json:"delta"`
+}
 
 // Represents one chunk of the response body of a streaming request.
 type threadStreamingResponseDelta struct {
@@ -22,32 +22,14 @@ type threadStreamingResponseDelta struct {
 		Type  string `json:"type"`
 		Text  struct {
 			Value       string        `json:"value"`
-			Annotations []interface{} `json:"annotations"`
+			Annotations []interface{} `json:"annotations,omitempty"`
 		} `json:"text"`
 	} `json:"content"`
 }
 
-func (c *OpenAIClient) makeRequest(method string, uri string, body []byte, headers map[string]string) (*http.Request, error) {
-	req, err := http.NewRequest(method, uri, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	// Set common headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.config.OpenAIApiKey)
-	req.Header.Set("OpenAI-Beta", "assistants=v2")
-
-	// Set user headers
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	return req, nil
-}
-
+// CreateThread creates a new thread in the OpenAI API and returns the thread ID.
 func (c *OpenAIClient) CreateThread() (string, error) {
-	endpoint := apiBaseUri + "/threads"
+	endpoint := threadsApiUri
 
 	// Build a request to create new thread
 	req, err := c.makeRequest("POST", endpoint, nil, nil)
@@ -80,12 +62,13 @@ func (c *OpenAIClient) CreateThread() (string, error) {
 	return threadId, nil
 }
 
-func (c *OpenAIClient) AddMessage(threadID string, role messages.Sender, content string) error {
-	endpoint := apiBaseUri + "/threads/" + threadID + "/messages"
+// AddMessage adds a message to a previously created thread in the OpenAI API.
+func (c *OpenAIClient) AddMessage(threadID string, content string) error {
+	endpoint := threadsApiUri + "/" + threadID + "/messages"
 
 	// Build our request body
 	body := map[string]string{
-		"role":    string(role),
+		"role":    "user",
 		"content": content,
 	}
 
@@ -112,8 +95,11 @@ func (c *OpenAIClient) AddMessage(threadID string, role messages.Sender, content
 	return nil
 }
 
-func (c *OpenAIClient) CreateRun(threadID string) (chan string, error) {
-	endpoint := apiBaseUri + "/threads/" + threadID + "/runs"
+// RunThread starts a new run in a previously created thread in the OpenAI API,
+// and returns a channel that will receive the response content in string
+// chunks.
+func (c *OpenAIClient) RunThread(threadID string) (chan string, error) {
+	endpoint := threadsApiUri + "/" + threadID + "/runs"
 
 	// Build our request body
 	body := struct {
@@ -160,6 +146,7 @@ func streamThreadRunResponse(body io.ReadCloser, deltaChan chan string) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
 		if strings.HasPrefix(line, "event:") {
 			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
 		} else if strings.HasPrefix(line, "data:") {
@@ -167,13 +154,15 @@ func streamThreadRunResponse(body io.ReadCloser, deltaChan chan string) {
 
 			if currentEvent == "thread.message.delta" {
 				// Parse the JSON-encoded delta
-				var delta threadStreamingResponseDelta
+				var response threadResponse
 
-				if err := json.Unmarshal([]byte(data), &delta); err != nil {
+				if err := json.Unmarshal([]byte(data), &response); err != nil {
 					// Handle JSON parse error (optional)
 					fmt.Println("error parsing delta:", err)
 					continue
 				}
+
+				delta := response.Delta
 
 				// Send each piece of content from the delta to the channel
 				for _, content := range delta.Content {
@@ -185,10 +174,5 @@ func streamThreadRunResponse(body io.ReadCloser, deltaChan chan string) {
 				break
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		// Handle the scanning error (optional)
-		debug.Log("error reading response:", err)
 	}
 }
