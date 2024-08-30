@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	openai "github.com/sashabaranov/go-openai"
 
@@ -13,6 +14,7 @@ import (
 )
 
 const (
+	threadModel     string                = openai.GPT4o
 	completionModel string                = openai.GPT4o
 	summaryModel    string                = openai.GPT4oMini
 	embeddingsModel openai.EmbeddingModel = openai.LargeEmbedding3
@@ -26,11 +28,14 @@ type Client interface {
 }
 
 type OpenAIClient struct {
+	config *config.Config
 	client *openai.Client
+	http   *http.Client
 }
 
 func NewOpenAIClient(conf *config.Config) *OpenAIClient {
 	return &OpenAIClient{
+		config: conf,
 		client: openai.NewClient(conf.OpenAIApiKey),
 	}
 }
