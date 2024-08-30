@@ -133,7 +133,8 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	var buf strings.Builder
 
 	// Start the streaming response
-	responseChan := cm.context.GptClient.GetCompletionStream(cm.Conversation)
+	msgList := cm.Conversation.ChatCompletionMessages()
+	responseChan := cm.context.GptClient.GetCompletionStream(msgList)
 
 	go func() {
 		// Collect the streaming response

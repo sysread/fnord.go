@@ -10,7 +10,6 @@ import (
 
 	"github.com/sysread/fnord/pkg/config"
 	"github.com/sysread/fnord/pkg/debug"
-	"github.com/sysread/fnord/pkg/messages"
 )
 
 const (
@@ -20,8 +19,8 @@ const (
 )
 
 type Client interface {
-	GetCompletion(conversation messages.Conversation) (string, error)
-	GetCompletionStream(conversation messages.Conversation) chan string
+	GetCompletion(msgList []openai.ChatCompletionMessage) (string, error)
+	GetCompletionStream(msgList []openai.ChatCompletionMessage) chan string
 	GetEmbedding(text string) ([]float32, error)
 	QuickCompletion(systemPrompt string, userPrompt string) (string, error)
 }
@@ -57,12 +56,12 @@ func (c *OpenAIClient) QuickCompletion(systemPrompt string, userPrompt string) (
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
 }
 
-func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string, error) {
+func (c *OpenAIClient) GetCompletion(msgList []openai.ChatCompletionMessage) (string, error) {
 	res, err := c.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
 			Model:    completionModel,
-			Messages: conversation.ChatCompletionMessages(),
+			Messages: msgList,
 		},
 	)
 
@@ -75,7 +74,7 @@ func (c *OpenAIClient) GetCompletion(conversation messages.Conversation) (string
 	return fmt.Sprintf(res.Choices[0].Message.Content), nil
 }
 
-func (c *OpenAIClient) GetCompletionStream(conversation *messages.Conversation) chan string {
+func (c *OpenAIClient) GetCompletionStream(msgList []openai.ChatCompletionMessage) chan string {
 	out := make(chan string)
 
 	go func() {
@@ -83,7 +82,7 @@ func (c *OpenAIClient) GetCompletionStream(conversation *messages.Conversation) 
 			context.Background(),
 			openai.ChatCompletionRequest{
 				Model:    openai.GPT3Dot5Turbo,
-				Messages: conversation.ChatCompletionMessages(),
+				Messages: msgList,
 				Stream:   true,
 			},
 		)
