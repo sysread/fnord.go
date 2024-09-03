@@ -101,18 +101,11 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	if err != nil {
 		debug.Log("Error searching for related conversations: %v", err)
 	} else {
-		var buffer strings.Builder
-
-		buffer.WriteString("Summary of related past conversations:\n\n")
-
+		cm.AddMessage(messages.NewMessage(messages.You, "Summaries of related past conversations", true))
 		for _, conversation := range related {
-			fmt.Fprintf(&buffer, "Conversation occurring between %v and %v\n", conversation.Created, conversation.Modified)
-			fmt.Fprintf(&buffer, "%s\n\n", conversation.Summary)
+			content := fmt.Sprintf("Conversation occurring between %v and %v:\n\n%s", conversation.Created, conversation.Modified, conversation.Summary)
+			cm.AddMessage(messages.NewMessage(messages.You, content, true))
 		}
-
-		relatedMessage := messages.NewMessage(messages.System, buffer.String(), true)
-
-		cm.AddMessage(relatedMessage)
 	}
 
 	// Buffer to collect the streaming response
