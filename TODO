@@ -1,2 +1,5 @@
 - embedding service for directories, possibly tied to "box"
 - visual format bug in textsel
+- something isn't working when adding RAG results to thread
+  - maybe reimplement using vector store by saving all conversations as
+    markdown files and then uploading them
