@@ -47,7 +47,7 @@ type chatView struct {
 func (ui *UI) newChatView() *chatView {
 	cv := &chatView{
 		ui:      ui,
-		chatMgr: chat_manager.NewChatManager(ui.Context),
+		chatMgr: chat_manager.NewChatManager(ui.Fnord),
 	}
 
 	cv.container = tview.NewFlex().
@@ -88,7 +88,7 @@ func (ui *UI) newChatView() *chatView {
 	cv.container.AddItem(cv.chatFlex, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
-		title: "Chat: " + ui.Context.Config.Box,
+		title: "Chat: " + ui.Fnord.Config.Box,
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},

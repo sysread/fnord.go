@@ -1,5 +1,6 @@
 - embedding service for directories, possibly tied to "box"
-- visual format bug in textsel
+- visual format bug in textsel with format codes
+- cursor highlight retained on screen when in selection mode
 - something isn't working when adding RAG results to thread
   - maybe reimplement using vector store by saving all conversations as
     markdown files and then uploading them

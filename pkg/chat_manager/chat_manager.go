@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sysread/fnord/pkg/context"
 	"github.com/sysread/fnord/pkg/data"
 	"github.com/sysread/fnord/pkg/debug"
+	"github.com/sysread/fnord/pkg/fnord"
 	"github.com/sysread/fnord/pkg/messages"
 )
 
@@ -28,17 +28,17 @@ Take the user input and respond ONLY with a very short query string to use RAG t
 // the conversation.
 type ChatManager struct {
 	*data.PersistedConversation
-	context  *context.Context
+	fnord    *fnord.Fnord
 	threadID string
 }
 
 // NewChatManager creates a new ChatManager instance.
-func NewChatManager(ctx *context.Context) *ChatManager {
-	pc := ctx.DataStore.NewPersistedConversation()
+func NewChatManager(fnord *fnord.Fnord) *ChatManager {
+	pc := fnord.DataStore.NewPersistedConversation()
 
 	return &ChatManager{
 		PersistedConversation: pc,
-		context:               ctx,
+		fnord:                 fnord,
 	}
 }
 
@@ -48,7 +48,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 
 	// Create the thread if it doesn't exist yet
 	if cm.threadID == "" {
-		threadID, err := cm.context.GptClient.CreateThread()
+		threadID, err := cm.fnord.GptClient.CreateThread()
 		if err != nil {
 			debug.Log("Error creating thread: %v", err)
 			return
@@ -60,7 +60,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 	// Add user messages to the thread. Assistant messages are added
 	// automatically during the thread run.
 	if msg.IsUserMessage() {
-		err := cm.context.GptClient.AddMessage(cm.threadID, msg.Content)
+		err := cm.fnord.GptClient.AddMessage(cm.threadID, msg.Content)
 		if err != nil {
 			debug.Log("Error adding message to thread: %v", err)
 			return
@@ -78,7 +78,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 			summary, _ := cm.GenerateSummary()
 
 			// Using the updated summary, generate a new embedding
-			embedding, _ := cm.context.GptClient.GetEmbedding(summary)
+			embedding, _ := cm.fnord.GptClient.GetEmbedding(summary)
 
 			// Store the updated summary and embedding in the struct
 			cm.SetSummary(summary, embedding)
@@ -112,7 +112,7 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	var buf strings.Builder
 
 	// Start the streaming response
-	responseChan, err := cm.context.GptClient.RunThread(cm.threadID)
+	responseChan, err := cm.fnord.GptClient.RunThread(cm.threadID)
 	if err != nil {
 		debug.Log("Error starting response stream: %v", err)
 		return
@@ -144,7 +144,7 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 // Generates a summary of the conversation transcript using the fast model.
 func (cm *ChatManager) GenerateSummary() (string, error) {
 	userPrompt := cm.ChatTranscript()
-	return cm.context.GptClient.GetCompletion(systemSummaryPrompt, userPrompt)
+	return cm.fnord.GptClient.GetCompletion(systemSummaryPrompt, userPrompt)
 }
 
 // Takes a user's prompt message, uses the fast model to generate a search
@@ -152,16 +152,16 @@ func (cm *ChatManager) GenerateSummary() (string, error) {
 // conversation directory for the most similar conversations.
 func (cm *ChatManager) Search(queryString string, numResults int) ([]data.ConversationIndexEntry, error) {
 	// Generate a search query from the user input
-	query, err := cm.context.GptClient.GetCompletion(searchQueryPrompt, queryString)
+	query, err := cm.fnord.GptClient.GetCompletion(searchQueryPrompt, queryString)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate an embedding for the newly generated search query
-	embedding, err := cm.context.GptClient.GetEmbedding(query)
+	embedding, err := cm.fnord.GptClient.GetEmbedding(query)
 	if err != nil {
 		return nil, err
 	}
 
-	return cm.context.DataStore.Search(embedding, numResults)
+	return cm.fnord.DataStore.Search(embedding, numResults)
 }
