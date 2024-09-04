@@ -1,20 +1,13 @@
 package gpt
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 )
 
 const threadsApiUri = apiBaseUri + "/threads"
 const threadModel = "gpt-4o"
-
-// Represents the response body of a streaming request.
-type threadResponse struct {
-	Delta threadStreamingResponseDelta `json:"delta"`
-}
 
 // Represents one chunk of the response body of a streaming request.
 type threadStreamingResponseDelta struct {
@@ -35,13 +28,13 @@ func (c *OpenAIClient) CreateThread() (string, error) {
 	// Build a request to create new thread
 	req, err := c.makeRequest("POST", endpoint, nil, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
+		return "", fmt.Errorf("failed to create request: %#v", err)
 	}
 
 	// Perform the request
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to make request: %v", err)
+		return "", fmt.Errorf("failed to make request: %#v", err)
 	}
 
 	// Ensure the response body is closed
@@ -52,7 +45,7 @@ func (c *OpenAIClient) CreateThread() (string, error) {
 	var response map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse response body: %v", err)
+		return "", fmt.Errorf("failed to parse response body: %#v", err)
 	}
 
 	threadId, ok := response["id"].(string)
@@ -75,19 +68,19 @@ func (c *OpenAIClient) AddMessage(threadID string, content string) error {
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("body could not be serialized as json: %v", err)
+		return fmt.Errorf("body could not be serialized as json: %#v", err)
 	}
 
 	// Build a request to add a message to the thread
 	req, err := c.makeRequest("POST", endpoint, jsonBody, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		return fmt.Errorf("failed to create request: %#v", err)
 	}
 
 	// Perform the request
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %v", err)
+		return fmt.Errorf("failed to make request: %#v", err)
 	}
 
 	// Ensure the response body is closed
@@ -96,10 +89,10 @@ func (c *OpenAIClient) AddMessage(threadID string, content string) error {
 	return nil
 }
 
-// RunThread starts a new run in a previously created thread in the OpenAI API,
+// CreateRun starts a new run in a previously created thread in the OpenAI API,
 // and returns a channel that will receive the response content in string
 // chunks.
-func (c *OpenAIClient) RunThread(threadID string) (chan string, error) {
+func (c *OpenAIClient) CreateRun(threadID string) (io.ReadCloser, error) {
 	endpoint := threadsApiUri + "/" + threadID + "/runs"
 
 	// Build our request body
@@ -113,67 +106,61 @@ func (c *OpenAIClient) RunThread(threadID string) (chan string, error) {
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("body could not be serialized as json: %v", err)
+		return nil, fmt.Errorf("body could not be serialized as json: %#v", err)
 	}
 
 	// Build a request to create a new run
 	req, err := c.makeRequest("POST", endpoint, jsonBody, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %#v", err)
 	}
 
 	// Perform the request
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %v", err)
+		return nil, fmt.Errorf("failed to make request: %#v", err)
+	}
+	if resp.StatusCode != 200 {
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to start thread run: %#v - %s", resp.Status, msg)
 	}
 
-	responseChan := make(chan string)
-
-	// Start a goroutine to stream the response body
-	go streamThreadRunResponse(resp.Body, responseChan)
-
-	return responseChan, nil
+	return resp.Body, nil
 }
 
-// streamResponse reads the response body of a streaming request and sends each
-// piece of content to the provided channel.
-func streamThreadRunResponse(body io.ReadCloser, deltaChan chan string) {
-	defer close(deltaChan)
-	defer body.Close()
+func (c *OpenAIClient) submitToolOutputs(threadID string, runID string, outputs []toolOutput) (io.ReadCloser, error) {
+	endpoint := threadsApiUri + "/" + threadID + "/runs/" + runID + "/submit_tool_outputs"
 
-	scanner := bufio.NewScanner(body)
-	var currentEvent string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "event:") {
-			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		} else if strings.HasPrefix(line, "data:") {
-			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-
-			if currentEvent == "thread.message.delta" {
-				// Parse the JSON-encoded delta
-				var response threadResponse
-
-				if err := json.Unmarshal([]byte(data), &response); err != nil {
-					// Handle JSON parse error (optional)
-					fmt.Println("error parsing delta:", err)
-					continue
-				}
-
-				delta := response.Delta
-
-				// Send each piece of content from the delta to the channel
-				for _, content := range delta.Content {
-					deltaChan <- content.Text.Value
-				}
-			} else if currentEvent == "done" && data == "[DONE]" {
-				// If the "done" event is received, break the loop to close the
-				// channel.
-				break
-			}
-		}
+	// Build the request body
+	body := struct {
+		Stream      bool          `json:"stream"`
+		ToolOutputs []toolOutput `json:"tool_outputs"`
+	}{
+		Stream:      true,
+		ToolOutputs: outputs,
 	}
+
+	// Serialize the body
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("body could not be serialized as json: %#v", err)
+	}
+
+	// Build a request to submit tool outputs
+	req, err := c.makeRequest("POST", endpoint, jsonBody, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %#v", err)
+	}
+
+	// Perform the request
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %#v", err)
+	}
+	if resp.StatusCode != 200 {
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to submit tool outputs: %#v - %s", resp.Status, msg)
+	}
+
+	return resp.Body, nil
 }

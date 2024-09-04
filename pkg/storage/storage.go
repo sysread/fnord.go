@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/philippgille/chromem-go"
@@ -21,6 +23,8 @@ type Storage struct {
 type Result struct {
 	ID      string
 	Content string
+	Created string
+	Updated string
 }
 
 // NewStorage initializes the storage system
@@ -55,7 +59,17 @@ func (s *Storage) Create(content string) (string, error) {
 		return "", err
 	}
 
-	err = collection.Add(context.Background(), []string{id}, nil, nil, []string{content})
+	now := time.Now().Format(time.DateOnly)
+	document := chromem.Document{
+		ID:       id,
+		Content:  content,
+		Metadata: map[string]string{
+			"created": now,
+			"updated": now,
+		},
+	}
+
+	err = collection.AddDocument(context.Background(), document)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +89,27 @@ func (s *Storage) Read(id string) (string, error) {
 
 // Update modifies the content of an existing entry
 func (s *Storage) Update(id, content string) error {
-	return s.conversations.AddDocument(context.Background(), chromem.Document{ID: id, Content: content})
+	// Find the existing entry
+	existingEntry, err := s.conversations.GetByID(context.Background(), id)
+	if err != nil {
+		return err
+	}
+
+	// Delete it from the store
+	err = s.conversations.Delete(context.Background(), nil, nil, id)
+	if err != nil {
+		return err
+	}
+
+	// Then add the updated entry
+	return s.conversations.AddDocument(context.Background(), chromem.Document{
+		ID:       id,
+		Content:  content,
+		Metadata: map[string]string{
+			"created": existingEntry.Metadata["created"],
+			"updated": time.Now().Format(time.DateOnly),
+		},
+	})
 }
 
 // Delete removes an entry by UUID
@@ -97,8 +131,26 @@ func (s *Storage) Search(query string, numResults int) ([]Result, error) {
 
 	var conversations []Result
 	for _, doc := range results {
-		conversations = append(conversations, Result{ID: doc.ID, Content: doc.Content})
+		conversations = append(conversations, Result{
+			ID:      doc.ID,
+			Content: doc.Content,
+			Created: doc.Metadata["created"],
+			Updated: doc.Metadata["updated"],
+		})
 	}
 
 	return conversations, nil
+}
+
+// Returns a string representation of a search result.
+func (r *Result) String() string {
+	content := r.Content
+	created := r.Created
+	updated := r.Updated
+
+	if updated == "" {
+		return fmt.Sprintf("Conversation on %s:\n%s\n\n", created, content)
+	}
+
+	return fmt.Sprintf("Conversation from %s to %s:\n%s\n\n", created, updated, content)
 }

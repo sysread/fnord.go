@@ -123,6 +123,12 @@ func (ui *UI) newChatView() *chatView {
 		return event
 	})
 
+	//--------------------------------------------------------------------------
+	// TESTING
+	//--------------------------------------------------------------------------
+	cv.userInput.SetText("We are testing the app I'm using to talk to you today. Specifically, we're testing whether it is handling tool use requests from you correctly, and whether it correctly submits the tool output back to you. Please request tool output and respond positively if you receive the output correctly.", false)
+	go cv.onSubmit()
+
 	return cv
 }
 
