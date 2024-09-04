@@ -21,9 +21,9 @@ type Result struct {
 	Updated string
 }
 
+var path string
 var db *chromem.DB
 var conversations *chromem.Collection
-var path string
 
 // Init initializes the storage system
 func Init(config *config.Config) error {

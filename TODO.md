@@ -11,8 +11,8 @@
 # Bugs
 
 ## Logical
-- tbd
+- not tying conversations to the "box"
 
 ## UI/UX
-- bug: visual format bug in textsel with format codes
-- bug: cursor highlight retained on screen when in selection mode
+- visual format bug in textsel with format codes
+- cursor highlight retained on screen when in selection mode
