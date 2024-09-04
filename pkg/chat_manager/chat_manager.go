@@ -6,6 +6,7 @@ import (
 
 	"github.com/sysread/fnord/pkg/fnord"
 	"github.com/sysread/fnord/pkg/messages"
+	"github.com/sysread/fnord/pkg/storage"
 )
 
 const systemSummaryPrompt = `
@@ -65,14 +66,14 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 	// If the conversation has no vector ID, create, otherwise, update the
 	// conversation on disk.
 	if cm.vectorID == "" {
-		vectorID, err := cm.fnord.Storage.Create(cm.ChatTranscript())
+		vectorID, err := storage.Create(cm.ChatTranscript())
 		if err != nil {
 			panic(fmt.Sprintf("Error creating conversation: %#v", err))
 		}
 
 		cm.vectorID = vectorID
 	} else {
-		err := cm.fnord.Storage.Update(cm.vectorID, cm.ChatTranscript())
+		err := storage.Update(cm.vectorID, cm.ChatTranscript())
 		if err != nil {
 			panic(fmt.Sprintf("Error updating conversation: %#v", err))
 		}

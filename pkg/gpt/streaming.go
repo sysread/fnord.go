@@ -10,7 +10,6 @@ import (
 )
 
 type streamer struct {
-	storage         *storage.Storage
 	done            bool
 	msgOutputChan   chan<- string
 	toolCallOutputs []toolOutput
@@ -47,13 +46,7 @@ type toolOutput struct {
 }
 
 func (c *OpenAIClient) RunThread(threadID string, responseChan chan<- string) {
-	store, err := storage.NewStorage(c.config)
-	if err != nil {
-		panic(fmt.Sprintf("Error creating storage: %s", err))
-	}
-
 	s := &streamer{
-		storage:       store,
 		done:          false,
 		msgOutputChan: responseChan,
 	}
@@ -174,7 +167,7 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 			s.fail("Error unmarshalling query vector db args: %s", err)
 		}
 
-		results, err := s.storage.Search(query.QueryText, 10)
+		results, err := storage.Search(query.QueryText, 10)
 		if err != nil {
 			s.fail("Error searching storage: %s", err)
 		}
