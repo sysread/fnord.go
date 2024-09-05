@@ -23,7 +23,6 @@ type Config struct {
 
 	Home        string
 	Box         string
-	BoxPath     string
 	ProjectPath string
 }
 
@@ -35,8 +34,7 @@ func Getopts() *Config {
 	config.
 		SetEnvOptions().
 		ReadCommandLineOptions().
-		SetTestingOverrides().
-		SetBoxPath()
+		SetTestingOverrides()
 
 	if config.Help {
 		config.Usage()
@@ -46,7 +44,6 @@ func Getopts() *Config {
 		validateOpenAIApiKey().
 		validateOpenAIAsstId().
 		validateBox().
-		validateBoxPath().
 		validateProjectPath()
 }
 
@@ -102,14 +99,6 @@ func (c *Config) SetTestingOverrides() *Config {
 	return c
 }
 
-func (c *Config) SetBoxPath() *Config {
-	if c.Box != "" {
-		c.BoxPath = path.Join(c.Home, c.Box)
-	}
-
-	return c
-}
-
 //------------------------------------------------------------------------------
 // Validation
 //------------------------------------------------------------------------------
@@ -137,20 +126,6 @@ func (c *Config) validateBox() *Config {
 
 	if strings.Contains(c.Box, "/") {
 		die("Box name cannot contain '/'")
-	}
-
-	return c
-}
-
-func (c *Config) validateBoxPath() *Config {
-	// BoxPath should always be set by SetBoxPath if Box itself is set.
-	if c.BoxPath == "" {
-		die("Box name cannot be empty")
-	}
-
-	// Ensure the box directory exists.
-	if !makeDir(c.BoxPath) {
-		die("Could not create box directory (%s)", c.BoxPath)
 	}
 
 	return c

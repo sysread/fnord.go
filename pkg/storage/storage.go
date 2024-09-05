@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/philippgille/chromem-go"
+	gitignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/sysread/fnord/pkg/config"
 	"github.com/sysread/fnord/pkg/debug"
@@ -26,18 +27,22 @@ type Result struct {
 // DB is the database connection
 var DB *chromem.DB
 
-// ConversationsPath is the path to the storage directory for the selected box
-var ConversationsPath string
+// Path is the path to the storage directory for the selected box
+var Path string
 
 // Conversations is the chromem collection of conversation data
 var Conversations *chromem.Collection
 
 // Project path is the path to a project directory, selected by the user via
-// the --project flag, to be indexed by the service.
+// the --project flag, to be indexed by the service. This is optional. If
+// unset, the service will not index a project directory.
 var ProjectPath string
 
 // ProjectFiles is the chromem collection of files in the project directory
 var ProjectFiles *chromem.Collection
+
+// ProjectGitIgnored is the gitignore parser for the project directory
+var ProjectGitIgnored *gitignore.GitIgnore
 
 // Init initializes the storage system
 func Init(config *config.Config) error {
@@ -45,16 +50,17 @@ func Init(config *config.Config) error {
 		return nil
 	}
 
-	ConversationsPath = filepath.Join(config.BoxPath, "vector_store")
+	Path = filepath.Join(config.Home, "vector_store")
 
 	var err error
 
-	DB, err = chromem.NewPersistentDB(ConversationsPath, true)
+	DB, err = chromem.NewPersistentDB(Path, true)
 	if err != nil {
 		return err
 	}
 
-	Conversations, err = DB.GetOrCreateCollection("conversations", nil, nil)
+	conversationsCollectionName := "conversations_" + config.Box
+	Conversations, err = DB.GetOrCreateCollection(conversationsCollectionName, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -66,11 +72,18 @@ func Init(config *config.Config) error {
 		}
 
 		ProjectPath = config.ProjectPath
+
 		collectionName := fmt.Sprintf("project_files:%s", ProjectPath)
 		ProjectFiles, err = DB.GetOrCreateCollection(collectionName, nil, nil)
 		if err != nil {
-			debug.Log("Error creating project_files collection: %v", err)
+			debug.Log("Error creating %s collection: %v", collectionName, err)
 		} else {
+			// Load the .gitignore file
+			ProjectGitIgnored, err = gitignore.CompileIgnoreFile(filepath.Join(ProjectPath, ".gitignore"))
+			if err != nil {
+				panic(fmt.Errorf("error loading .gitignore: %v", err))
+			}
+
 			go startIndexer()
 		}
 	}

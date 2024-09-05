@@ -12,12 +12,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/h2non/filetype"
 	"github.com/philippgille/chromem-go"
-	gitignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/sysread/fnord/pkg/debug"
 )
-
-var ProjectGitIgnored *gitignore.GitIgnore
 
 func startIndexer() {
 	debug.Log("Indexing project directory %s", ProjectPath)
@@ -30,14 +27,6 @@ func startIndexer() {
 	if ProjectFiles == nil {
 		debug.Log("ProjectFiles collection not initialized")
 		return
-	}
-
-	var err error
-
-	// Load the .gitignore file
-	ProjectGitIgnored, err = gitignore.CompileIgnoreFile(filepath.Join(ProjectPath, ".gitignore"))
-	if err != nil {
-		panic(fmt.Errorf("error loading .gitignore: %v", err))
 	}
 
 	// On init, ensure that everything that is not git-ignored in the
@@ -53,7 +42,7 @@ func startIndexer() {
 	indexPaths(toIndex)
 
 	// Start the directory watcher, and index new files or files that have changed.
-	err = watchProjectDir()
+	err := watchProjectDir()
 	if err != nil {
 		panic(fmt.Errorf("failed to start directory watcher: %v", err))
 	}
@@ -73,7 +62,6 @@ func walkProjectDir(fn func(path string)) error {
 		if !canIndex(path) {
 			return nil
 		}
-
 
 		fn(path)
 
