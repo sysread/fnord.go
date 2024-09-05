@@ -57,7 +57,7 @@ func Init(config *config.Config) error {
 func Create(content string) (string, error) {
 	id := uuid.New().String()
 
-	now := time.Now().Format(time.DateOnly)
+	now := time.Now().Format(time.RFC3339)
 	document := chromem.Document{
 		ID:      id,
 		Content: content,
@@ -93,10 +93,11 @@ func Update(id, content string) error {
 		return err
 	}
 
-	// Delete it from the store
-	err = Conversations.Delete(context.Background(), nil, nil, id)
-	if err != nil {
-		return err
+	// Preserve the original creation date and generate a new updated date
+	now := time.Now().Format(time.RFC3339)
+	created := existingEntry.Metadata["created"]
+	if created == "" {
+		created = now
 	}
 
 	// Then add the updated entry
@@ -104,8 +105,8 @@ func Update(id, content string) error {
 		ID:      id,
 		Content: content,
 		Metadata: map[string]string{
-			"created": existingEntry.Metadata["created"],
-			"updated": time.Now().Format(time.DateOnly),
+			"created": created,
+			"updated": now,
 		},
 	})
 }
