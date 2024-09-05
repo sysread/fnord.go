@@ -15,6 +15,8 @@ const (
 )
 
 type Config struct {
+	Help         bool
+	Testing      bool
 	Home         string
 	Box          string
 	BoxPath      string
@@ -23,17 +25,26 @@ type Config struct {
 }
 
 func Getopts() *Config {
-	config := &Config{}
+	config := &Config{
+		Testing: false,
+	}
 
 	config.
-		SetOpenAIApiKey().
-		SetOpenAIAsstId().
-		SetHomeFromEnv().
-		ReadCommandLineOptions()
+		SetEnvOptions().
+		ReadCommandLineOptions().
+		SetTestingOverrides().
+		SetBoxPath()
+
+	if config.Help {
+		fmt.Println("Usage: fnord [options]")
+		pflag.PrintDefaults()
+		os.Exit(0)
+	}
 
 	return config.
 		validateOpenAIApiKey().
 		validateOpenAIAsstId().
+		validateBox().
 		validateBoxPath()
 }
 
@@ -41,17 +52,22 @@ func Getopts() *Config {
 // Setters
 //------------------------------------------------------------------------------
 
-func (c *Config) SetOpenAIApiKey() *Config {
+func (c *Config) ReadCommandLineOptions() *Config {
+	pflag.BoolVarP(&c.Help, "help", "h", false, "display this help message")
+	pflag.BoolVarP(&c.Testing, "testing", "t", false, "enable testing mode (forces --box to be 'testing')")
+	pflag.StringVarP(&c.Box, "box", "b", DefaultBox, "boxes are isolated workspaces; conversations held within a box are isolated from other boxes")
+	pflag.Parse()
+	return c
+}
+
+func (c *Config) SetEnvOptions() *Config {
 	c.OpenAIApiKey = os.Getenv("FNORD_OPENAI_API_KEY")
-	return c
-}
-
-func (c *Config) SetOpenAIAsstId() *Config {
 	c.OpenAIAsstId = os.Getenv("FNORD_OPENAI_ASST_ID")
-	return c
-}
 
-func (c *Config) SetHomeFromEnv() *Config {
+	if os.Getenv("FNORD_TESTING") == "true" || os.Getenv("FNORD_TESTING") == "1" {
+		c.Testing = true
+	}
+
 	// Determine the base directory.
 	basePath := os.Getenv("FNORD_HOME")
 	if basePath == "" {
@@ -64,12 +80,23 @@ func (c *Config) SetHomeFromEnv() *Config {
 	}
 
 	c.Home = basePath
+
 	return c
 }
 
-func (c *Config) ReadCommandLineOptions() *Config {
-	pflag.StringVar(&c.Box, "box", DefaultBox, "boxes are isolated workspaces; conversations held within a box are isolated from other boxes")
-	pflag.Parse()
+func (c *Config) SetTestingOverrides() *Config {
+	if c.Testing {
+		c.Box = "testing"
+	}
+
+	return c
+}
+
+func (c *Config) SetBoxPath() *Config {
+	if c.Box != "" {
+		c.BoxPath = path.Join(c.Home, c.Box)
+	}
+
 	return c
 }
 
@@ -93,7 +120,7 @@ func (c *Config) validateOpenAIAsstId() *Config {
 	return c
 }
 
-func (c *Config) validateBoxPath() *Config {
+func (c *Config) validateBox() *Config {
 	if c.Box == "" {
 		die("Box name cannot be empty")
 	}
@@ -102,8 +129,16 @@ func (c *Config) validateBoxPath() *Config {
 		die("Box name cannot contain '/'")
 	}
 
-	c.BoxPath = path.Join(c.Home, c.Box)
+	return c
+}
 
+func (c *Config) validateBoxPath() *Config {
+	// BoxPath should always be set by SetBoxPath if Box itself is set.
+	if c.BoxPath == "" {
+		die("Box name cannot be empty")
+	}
+
+	// Ensure the box directory exists.
 	if !makeDir(c.BoxPath) {
 		die("Could not create box directory (%s)", c.BoxPath)
 	}

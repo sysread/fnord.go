@@ -11,7 +11,6 @@
 # Bugs
 
 ## Logical
-- not tying conversations to the "box"
 
 ## UI/UX
 - visual format bug in textsel with format codes

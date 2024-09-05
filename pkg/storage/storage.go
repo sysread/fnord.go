@@ -31,7 +31,7 @@ func Init(config *config.Config) error {
 		return nil
 	}
 
-	path = filepath.Join(config.Home, "vector_store")
+	path = filepath.Join(config.BoxPath, "vector_store")
 
 	var err error
 
