@@ -14,15 +14,12 @@ const (
 )
 
 type Config struct {
-	Help    bool
-	Testing bool
-
+	Help         bool
+	Testing      bool
 	OpenAIApiKey string
-	OpenAIAsstId string
-
-	Home        string
-	Box         string
-	ProjectPath string
+	Home         string
+	Box          string
+	ProjectPath  string
 }
 
 func Getopts() *Config {
@@ -41,7 +38,6 @@ func Getopts() *Config {
 
 	return config.
 		validateOpenAIApiKey().
-		validateOpenAIAsstId().
 		validateBox().
 		validateProjectPath()
 }
@@ -67,7 +63,6 @@ func (c *Config) ReadCommandLineOptions() *Config {
 
 func (c *Config) SetEnvOptions() *Config {
 	c.OpenAIApiKey = os.Getenv("FNORD_OPENAI_API_KEY")
-	c.OpenAIAsstId = os.Getenv("FNORD_OPENAI_ASST_ID")
 	c.ProjectPath = os.Getenv("FNORD_PROJECT_PATH")
 
 	if os.Getenv("FNORD_TESTING") == "true" || os.Getenv("FNORD_TESTING") == "1" {
@@ -105,14 +100,6 @@ func (c *Config) SetTestingOverrides() *Config {
 func (c *Config) validateOpenAIApiKey() *Config {
 	if c.OpenAIApiKey == "" {
 		die("FNORD_OPENAI_API_KEY must be set in the shell environment")
-	}
-
-	return c
-}
-
-func (c *Config) validateOpenAIAsstId() *Config {
-	if c.OpenAIAsstId == "" {
-		die("FNORD_OPENAI_ASST_ID must be set in the shell environment")
 	}
 
 	return c

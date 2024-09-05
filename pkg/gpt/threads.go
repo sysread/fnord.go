@@ -100,7 +100,7 @@ func (c *OpenAIClient) CreateRun(threadID string) (io.ReadCloser, error) {
 		AssistantID string `json:"assistant_id"`
 		Stream      bool   `json:"stream"`
 	}{
-		AssistantID: c.config.OpenAIAsstId,
+		AssistantID: AssistantID,
 		Stream:      true,
 	}
 
