@@ -73,6 +73,7 @@ func (c *Config) SetEnvOptions() *Config {
 	basePath := os.Getenv("FNORD_HOME")
 	if basePath == "" {
 		basePath = filepath.Join(os.Getenv("HOME"), ".config", "fnord")
+		basePath, _ = filepath.Abs(basePath)
 	}
 
 	// Ensure the base directory exists.
