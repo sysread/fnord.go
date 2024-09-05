@@ -12,20 +12,17 @@ import (
 const asstApiUri = apiBaseUri + "/assistants"
 const assistantName = "Fnord Prefect"
 
-// The version of the assistant. Stored in the assistant's metadata.
-// Note that this must correspond to the version in assistant.json
-const asstVersion = "1.0.0"
-
 //go:embed assistant.json
 var assistantFiles embed.FS
 var assistantJSON []byte
+var desiredAssistantVersion = "1.0.1"
 
 var AssistantID string
 var AssistantVersion string
 
 type assistantInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
 	Metadata map[string]string `json:"metadata"`
 }
 
@@ -42,6 +39,15 @@ func (c *OpenAIClient) initAssistant() error {
 		panic(fmt.Errorf("failed to read assistant JSON file: %v", err))
 	}
 
+	// Parse the assistant JSON file
+	var asst map[string]interface{}
+	if err := json.Unmarshal(assistantJSON, &asst); err != nil {
+		panic(fmt.Errorf("failed to parse assistant JSON: %v", err))
+	}
+
+	// Set the assistant's version from the JSON file
+	desiredAssistantVersion = asst["metadata"].(map[string]interface{})["version"].(string)
+
 	if err := c.findAssistant(); err != nil {
 		return c.createAssistant()
 	}
@@ -49,8 +55,8 @@ func (c *OpenAIClient) initAssistant() error {
 	debug.Log("Found Assistant: %s", AssistantID)
 	debug.Log("      - Version: %s", AssistantVersion)
 
-	if AssistantVersion != asstVersion {
-		debug.Log("Updating Assistant to version %s", asstVersion)
+	if AssistantVersion != desiredAssistantVersion {
+		debug.Log("Updating Assistant to version %s", desiredAssistantVersion)
 		return c.updateAssistant()
 	}
 

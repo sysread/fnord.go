@@ -1,6 +1,5 @@
 # TODO
 
-- www tool for asst
 - delete "box"
 - status while thread is running
 - (?) some equivalent of `cmd`

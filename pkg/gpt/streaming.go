@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sysread/fnord/pkg/storage"
+	"github.com/sysread/fnord/pkg/util"
 )
 
 type streamer struct {
@@ -204,6 +205,25 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
 			ToolCallID: toolCallID,
 			Output:     output.String(),
+		})
+
+	case "curl":
+		var args struct {
+			URL string `json:"url"`
+		}
+
+		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			s.fail("Error unmarshalling curl args: %s", err)
+		}
+
+		output, err := util.HttpGet(args.URL)
+		if err != nil {
+			s.fail("Error making HTTP request: %s", err)
+		}
+
+		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
+			ToolCallID: toolCallID,
+			Output:     fmt.Sprintf("Contents of %s:\n%s", args.URL, output),
 		})
 
 	default:
