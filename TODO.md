@@ -1,7 +1,7 @@
 # TODO
 
-- lookup and/or create asst on startup
 - print env vars with --help
+- www tool for asst
 - list "boxes"
 - delete "box"
 - status while thread is running

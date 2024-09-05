@@ -182,13 +182,13 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 			Output:     output.String(),
 		})
 
-	case "query_local_files":
+	case "query_project_files":
 		var query struct {
 			QueryText string `json:"query_text"`
 		}
 
 		if err := json.Unmarshal([]byte(argsJSON), &query); err != nil {
-			s.fail("Error unmarshalling query_local_files args: %s", err)
+			s.fail("Error unmarshalling query_project_files args: %s", err)
 		}
 
 		results, err := storage.SearchProject(query.QueryText, 10)

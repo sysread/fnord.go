@@ -20,8 +20,15 @@ type OpenAIClient struct {
 }
 
 func NewOpenAIClient(conf *config.Config) *OpenAIClient {
-	return &OpenAIClient{
+	c := &OpenAIClient{
 		config: conf,
 		http:   &http.Client{},
 	}
+
+	err := c.initAssistant()
+	if err != nil {
+		panic(err)
+	}
+
+	return c
 }
