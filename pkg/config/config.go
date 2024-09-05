@@ -43,8 +43,30 @@ func Getopts() *Config {
 }
 
 func (c *Config) Usage() {
-	fmt.Println("Usage: fnord [options]")
+	fmt.Println("Usage: fnord [sub-commands] [options]")
+
+	fmt.Println("")
+	fmt.Println("Sub-commands:")
+	fmt.Println("  list-boxes       List all previously created boxes")
+	fmt.Println("  list-projects    List all previously created projects")
+
+	fmt.Println("")
+	fmt.Println("Options:")
 	pflag.PrintDefaults()
+
+	fmt.Println("")
+	fmt.Println("Environment:")
+	fmt.Println("  Environment variables can be used to set some configuration options.")
+	fmt.Println("  Command-line options take precedence over environment variables.")
+	fmt.Println("")
+	fmt.Println("    FNORD_OPENAI_API_KEY  OpenAI API key (required)")
+	fmt.Println("    FNORD_HOME            Base directory for storage (default: $HOME/.config/fnord)")
+	fmt.Println("    FNORD_BOX             Name of the box to use (same as --box)")
+	fmt.Println("    FNORD_PROJECT_PATH    Path to the project directory (same as --project)")
+	fmt.Println("    FNORD_TESTING         Enable testing mode (same as --testing)")
+
+	fmt.Println("")
+
 	os.Exit(0)
 }
 
@@ -63,6 +85,7 @@ func (c *Config) ReadCommandLineOptions() *Config {
 
 func (c *Config) SetEnvOptions() *Config {
 	c.OpenAIApiKey = os.Getenv("FNORD_OPENAI_API_KEY")
+	c.Box = os.Getenv("FNORD_BOX")
 	c.ProjectPath = os.Getenv("FNORD_PROJECT_PATH")
 
 	if os.Getenv("FNORD_TESTING") == "true" || os.Getenv("FNORD_TESTING") == "1" {

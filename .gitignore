@@ -21,8 +21,12 @@
 go.work
 go.work.sum
 
+# Ignore build object `fnord` at the root level
+/fnord
+
+# Ensure `pkg/fnord/fnord.go` is included
+!pkg/fnord/fnord.go
+
 tags
 debug.log
-scratch/*
-scratch.go
-fnord
+scratch

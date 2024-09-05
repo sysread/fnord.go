@@ -1,8 +1,6 @@
 # TODO
 
-- print env vars with --help
 - www tool for asst
-- list "boxes"
 - delete "box"
 - status while thread is running
 - (?) some equivalent of `cmd`

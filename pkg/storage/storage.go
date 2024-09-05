@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,7 +60,7 @@ func Init(config *config.Config) error {
 		return err
 	}
 
-	conversationsCollectionName := "conversations_" + config.Box
+	conversationsCollectionName := "conversations:" + config.Box
 	Conversations, err = DB.GetOrCreateCollection(conversationsCollectionName, nil, nil)
 	if err != nil {
 		return err
@@ -89,6 +90,38 @@ func Init(config *config.Config) error {
 	}
 
 	return nil
+}
+
+// Function to list all boxes' collections
+func GetBoxes() ([]string, error) {
+	collections := DB.ListCollections()
+	var boxes []string
+
+	for name := range collections {
+		// We exclude project files' collections based on their naming pattern
+		if strings.HasPrefix(name, "conversations:") {
+			name = strings.TrimPrefix(name, "conversations:")
+			boxes = append(boxes, name)
+		}
+	}
+
+	return boxes, nil
+}
+
+// Function to list all projects' collections
+func GetProjects() ([]string, error) {
+	collections := DB.ListCollections()
+	var projects []string
+
+	for name := range collections {
+		// We exclude project files' collections based on their naming pattern
+		if strings.HasPrefix(name, "project_files:") {
+			name = strings.TrimPrefix(name, "project_files:")
+			projects = append(projects, name)
+		}
+	}
+
+	return projects, nil
 }
 
 // Create stores a new entry and returns its UUID
