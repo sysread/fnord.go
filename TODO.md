@@ -1,11 +1,11 @@
 # TODO
 
+- lookup and/or create asst on startup
+- print env vars with --help
 - list "boxes"
 - delete "box"
-- lookup and/or create asst on startup
 - status while thread is running
 - (?) some equivalent of `cmd`
-- print env vars with --help
 
 
 # Bugs
@@ -15,4 +15,3 @@
 ## UI/UX
 - visual format bug in textsel with format codes
 - cursor highlight retained on screen when in selection mode
-- more clearly distinguish the line between messages
