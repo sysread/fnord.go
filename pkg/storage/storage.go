@@ -21,26 +21,31 @@ type Result struct {
 	Updated string
 }
 
-var path string
-var db *chromem.DB
-var conversations *chromem.Collection
+// Path is the path to the storage directory for the selected box
+var Path string
+
+// DB is the database connection
+var DB *chromem.DB
+
+// Conversations is the collection of conversation data
+var Conversations *chromem.Collection
 
 // Init initializes the storage system
 func Init(config *config.Config) error {
-	if db != nil {
+	if DB != nil {
 		return nil
 	}
 
-	path = filepath.Join(config.BoxPath, "vector_store")
+	Path = filepath.Join(config.BoxPath, "vector_store")
 
 	var err error
 
-	db, err = chromem.NewPersistentDB(path, true)
+	DB, err = chromem.NewPersistentDB(Path, true)
 	if err != nil {
 		return err
 	}
 
-	conversations, err = db.GetOrCreateCollection("conversations", nil, nil)
+	Conversations, err = DB.GetOrCreateCollection("conversations", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -62,7 +67,7 @@ func Create(content string) (string, error) {
 		},
 	}
 
-	err := conversations.AddDocument(context.Background(), document)
+	err := Conversations.AddDocument(context.Background(), document)
 	if err != nil {
 		return "", err
 	}
@@ -72,7 +77,7 @@ func Create(content string) (string, error) {
 
 // Read retrieves content by UUID
 func Read(id string) (string, error) {
-	document, err := conversations.GetByID(context.Background(), id)
+	document, err := Conversations.GetByID(context.Background(), id)
 	if err != nil {
 		return "", err
 	}
@@ -83,19 +88,19 @@ func Read(id string) (string, error) {
 // Update modifies the content of an existing entry
 func Update(id, content string) error {
 	// Find the existing entry
-	existingEntry, err := conversations.GetByID(context.Background(), id)
+	existingEntry, err := Conversations.GetByID(context.Background(), id)
 	if err != nil {
 		return err
 	}
 
 	// Delete it from the store
-	err = conversations.Delete(context.Background(), nil, nil, id)
+	err = Conversations.Delete(context.Background(), nil, nil, id)
 	if err != nil {
 		return err
 	}
 
 	// Then add the updated entry
-	return conversations.AddDocument(context.Background(), chromem.Document{
+	return Conversations.AddDocument(context.Background(), chromem.Document{
 		ID:      id,
 		Content: content,
 		Metadata: map[string]string{
@@ -107,24 +112,24 @@ func Update(id, content string) error {
 
 // Delete removes an entry by UUID
 func Delete(id string) error {
-	return conversations.Delete(context.Background(), nil, nil, id)
+	return Conversations.Delete(context.Background(), nil, nil, id)
 }
 
 // Search returns a list of UUIDs that match the query
 func Search(query string, numResults int) ([]Result, error) {
-	maxResults := conversations.Count()
+	maxResults := Conversations.Count()
 	if numResults > maxResults {
 		numResults = maxResults
 	}
 
-	results, err := conversations.Query(context.Background(), query, numResults, nil, nil)
+	results, err := Conversations.Query(context.Background(), query, numResults, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var conversations []Result
+	var found []Result
 	for _, doc := range results {
-		conversations = append(conversations, Result{
+		found = append(found, Result{
 			ID:      doc.ID,
 			Content: doc.Content,
 			Created: doc.Metadata["created"],
@@ -132,7 +137,7 @@ func Search(query string, numResults int) ([]Result, error) {
 		})
 	}
 
-	return conversations, nil
+	return found, nil
 }
 
 // Returns a string representation of a search result.

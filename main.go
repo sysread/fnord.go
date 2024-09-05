@@ -12,7 +12,6 @@ func main() {
 	}
 
 	defer debug.Close()
-	debug.Log("\n\n\n\n\n\n\n\n\n\n")
 
 	app := ui.New()
 	app.Run()
