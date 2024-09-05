@@ -25,6 +25,9 @@ Slash Commands
 escape closes
 `
 
+const UserMsgHeader = "[#000000:blue:b]You:[-:-:-]\n\n"
+const AssistantMsgHeader = "[#000000:green:b]Assistant:[-:-:-]\n\n"
+
 type chatView struct {
 	*tview.Frame
 
@@ -188,7 +191,7 @@ func (cv *chatView) ToggleReceiving() {
 			cv.container.AddItem(cv.chatFlex, 0, 1, false)
 			cv.isReceiving = false
 
-			cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+			cv.queueAppendText(AssistantMsgHeader)
 			cv.queueAppendText(cv.renderMarkdown(lastMessage.Content) + "\n")
 			cv.messageList.ScrollToEnd()
 		}
@@ -248,7 +251,7 @@ func (cv *chatView) onSubmit() {
 	for _, msg := range msgs {
 		if !msg.IsHidden {
 			content := cv.renderMarkdown(msg.Content)
-			cv.queueAppendText("[blue::b]You:[-:-:-]\n\n" + content + "\n")
+			cv.queueAppendText(UserMsgHeader + content + "\n")
 		}
 
 		cv.chatMgr.AddMessage(msg)
@@ -258,7 +261,7 @@ func (cv *chatView) onSubmit() {
 
 	// Get the assistant's response
 	cv.ToggleReceiving()
-	cv.queueAppendText("[green::b]Assistant:[-:-:-]\n\n")
+	cv.queueAppendText(AssistantMsgHeader)
 	cv.chatMgr.RequestResponse(func(chunk string) {
 		// Append the assistant's response to the chat view
 		cv.queueAppendText(chunk)
