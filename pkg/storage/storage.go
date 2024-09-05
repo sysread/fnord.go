@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/philippgille/chromem-go"
 
 	"github.com/sysread/fnord/pkg/config"
+	"github.com/sysread/fnord/pkg/debug"
 )
 
 // Result represents a search result
@@ -21,14 +23,21 @@ type Result struct {
 	Updated string
 }
 
-// Path is the path to the storage directory for the selected box
-var Path string
-
 // DB is the database connection
 var DB *chromem.DB
 
-// Conversations is the collection of conversation data
+// ConversationsPath is the path to the storage directory for the selected box
+var ConversationsPath string
+
+// Conversations is the chromem collection of conversation data
 var Conversations *chromem.Collection
+
+// Project path is the path to a project directory, selected by the user via
+// the --project flag, to be indexed by the service.
+var ProjectPath string
+
+// ProjectFiles is the chromem collection of files in the project directory
+var ProjectFiles *chromem.Collection
 
 // Init initializes the storage system
 func Init(config *config.Config) error {
@@ -36,11 +45,11 @@ func Init(config *config.Config) error {
 		return nil
 	}
 
-	Path = filepath.Join(config.BoxPath, "vector_store")
+	ConversationsPath = filepath.Join(config.BoxPath, "vector_store")
 
 	var err error
 
-	DB, err = chromem.NewPersistentDB(Path, true)
+	DB, err = chromem.NewPersistentDB(ConversationsPath, true)
 	if err != nil {
 		return err
 	}
@@ -48,6 +57,22 @@ func Init(config *config.Config) error {
 	Conversations, err = DB.GetOrCreateCollection("conversations", nil, nil)
 	if err != nil {
 		return err
+	}
+
+	if config.ProjectPath != "" {
+		gitPath := filepath.Join(config.ProjectPath, ".git")
+		if _, err := os.Stat(gitPath); err != nil {
+			return fmt.Errorf("project path %s is not a git repository", config.ProjectPath)
+		}
+
+		ProjectPath = config.ProjectPath
+		collectionName := fmt.Sprintf("project_files:%s", ProjectPath)
+		ProjectFiles, err = DB.GetOrCreateCollection(collectionName, nil, nil)
+		if err != nil {
+			debug.Log("Error creating project_files collection: %v", err)
+		} else {
+			go startIndexer()
+		}
 	}
 
 	return nil
@@ -67,7 +92,7 @@ func Create(content string) (string, error) {
 		},
 	}
 
-	err := Conversations.AddDocument(context.Background(), document)
+	err := Conversations.AddDocuments(context.Background(), []chromem.Document{document}, 2)
 	if err != nil {
 		return "", err
 	}
@@ -100,15 +125,17 @@ func Update(id, content string) error {
 		created = now
 	}
 
-	// Then add the updated entry
-	return Conversations.AddDocument(context.Background(), chromem.Document{
+	doc := chromem.Document{
 		ID:      id,
 		Content: content,
 		Metadata: map[string]string{
 			"created": created,
 			"updated": now,
 		},
-	})
+	}
+
+	// Then add the updated entry
+	return Conversations.AddDocuments(context.Background(), []chromem.Document{doc}, 2)
 }
 
 // Delete removes an entry by UUID
@@ -141,6 +168,32 @@ func Search(query string, numResults int) ([]Result, error) {
 	return found, nil
 }
 
+func SearchProject(query string, numResults int) ([]Result, error) {
+	if ProjectFiles == nil {
+		return []Result{}, nil
+	}
+
+	maxResults := ProjectFiles.Count()
+	if numResults > maxResults {
+		numResults = maxResults
+	}
+
+	results, err := ProjectFiles.Query(context.Background(), query, numResults, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var found []Result
+	for _, doc := range results {
+		found = append(found, Result{
+			ID:      doc.ID,
+			Content: doc.Content,
+		})
+	}
+
+	return found, nil
+}
+
 // Returns a string representation of a search result.
 func (r *Result) String() string {
 	content := r.Content
@@ -152,4 +205,10 @@ func (r *Result) String() string {
 	}
 
 	return fmt.Sprintf("Conversation from %s to %s:\n%s\n\n", created, updated, content)
+}
+
+func (r *Result) ProjectFileString() string {
+	path := r.ID
+	content := r.Content
+	return fmt.Sprintf("Project file: %s\n%s\n\n", path, content)
 }

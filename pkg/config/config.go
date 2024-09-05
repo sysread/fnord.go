@@ -161,6 +161,9 @@ func (c *Config) validateProjectPath() *Config {
 		die("Project path does not exist (%s)", c.ProjectPath)
 	}
 
+	absolutePath, _ := filepath.Abs(c.ProjectPath)
+	c.ProjectPath = absolutePath
+
 	return c
 }
 

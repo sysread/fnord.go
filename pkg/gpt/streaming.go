@@ -164,7 +164,7 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 		}
 
 		if err := json.Unmarshal([]byte(argsJSON), &query); err != nil {
-			s.fail("Error unmarshalling query vector db args: %s", err)
+			s.fail("Error unmarshalling query_vector_db args: %s", err)
 		}
 
 		results, err := storage.Search(query.QueryText, 10)
@@ -181,6 +181,31 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 			ToolCallID: toolCallID,
 			Output:     output.String(),
 		})
+
+	case "query_local_files":
+		var query struct {
+			QueryText string `json:"query_text"`
+		}
+
+		if err := json.Unmarshal([]byte(argsJSON), &query); err != nil {
+			s.fail("Error unmarshalling query_local_files args: %s", err)
+		}
+
+		results, err := storage.SearchProject(query.QueryText, 10)
+		if err != nil {
+			s.fail("Error searching storage: %s", err)
+		}
+
+		var output strings.Builder
+		for _, result := range results {
+			output.WriteString(result.ProjectFileString())
+		}
+
+		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
+			ToolCallID: toolCallID,
+			Output:     output.String(),
+		})
+
 	default:
 		s.fail("unhandled function call: %s", tool)
 	}
