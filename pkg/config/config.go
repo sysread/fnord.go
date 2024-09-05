@@ -15,13 +15,16 @@ const (
 )
 
 type Config struct {
-	Help         bool
-	Testing      bool
-	Home         string
-	Box          string
-	BoxPath      string
+	Help    bool
+	Testing bool
+
 	OpenAIApiKey string
 	OpenAIAsstId string
+
+	Home        string
+	Box         string
+	BoxPath     string
+	ProjectPath string
 }
 
 func Getopts() *Config {
@@ -36,16 +39,21 @@ func Getopts() *Config {
 		SetBoxPath()
 
 	if config.Help {
-		fmt.Println("Usage: fnord [options]")
-		pflag.PrintDefaults()
-		os.Exit(0)
+		config.Usage()
 	}
 
 	return config.
 		validateOpenAIApiKey().
 		validateOpenAIAsstId().
 		validateBox().
-		validateBoxPath()
+		validateBoxPath().
+		validateProjectPath()
+}
+
+func (c *Config) Usage() {
+	fmt.Println("Usage: fnord [options]")
+	pflag.PrintDefaults()
+	os.Exit(0)
 }
 
 //------------------------------------------------------------------------------
@@ -56,6 +64,7 @@ func (c *Config) ReadCommandLineOptions() *Config {
 	pflag.BoolVarP(&c.Help, "help", "h", false, "display this help message")
 	pflag.BoolVarP(&c.Testing, "testing", "t", false, "enable testing mode (forces --box to be 'testing')")
 	pflag.StringVarP(&c.Box, "box", "b", DefaultBox, "boxes are isolated workspaces; conversations held within a box are isolated from other boxes")
+	pflag.StringVarP(&c.ProjectPath, "project", "p", "", "path to the project directory; it will be indexed to make available for the assistant")
 	pflag.Parse()
 	return c
 }
@@ -63,6 +72,7 @@ func (c *Config) ReadCommandLineOptions() *Config {
 func (c *Config) SetEnvOptions() *Config {
 	c.OpenAIApiKey = os.Getenv("FNORD_OPENAI_API_KEY")
 	c.OpenAIAsstId = os.Getenv("FNORD_OPENAI_ASST_ID")
+	c.ProjectPath = os.Getenv("FNORD_PROJECT_PATH")
 
 	if os.Getenv("FNORD_TESTING") == "true" || os.Getenv("FNORD_TESTING") == "1" {
 		c.Testing = true
@@ -141,6 +151,14 @@ func (c *Config) validateBoxPath() *Config {
 	// Ensure the box directory exists.
 	if !makeDir(c.BoxPath) {
 		die("Could not create box directory (%s)", c.BoxPath)
+	}
+
+	return c
+}
+
+func (c *Config) validateProjectPath() *Config {
+	if c.ProjectPath != "" && !pathExists(c.ProjectPath) {
+		die("Project path does not exist (%s)", c.ProjectPath)
 	}
 
 	return c

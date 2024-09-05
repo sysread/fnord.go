@@ -6,6 +6,7 @@
 - status while thread is running
 - embedding service for directories, possibly tied to "box"
 - (?) some equivalent of `cmd`
+- print env vars with --help
 
 
 # Bugs
