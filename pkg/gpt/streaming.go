@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/sysread/fnord/pkg/storage"
 	"github.com/sysread/fnord/pkg/util"
@@ -209,21 +210,47 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 
 	case "curl":
 		var args struct {
-			URL string `json:"url"`
+			URLs []string `json:"urls"`
 		}
 
 		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 			s.fail("Error unmarshalling curl args: %s", err)
 		}
 
-		output, err := util.HttpGet(args.URL)
-		if err != nil {
-			s.fail("Error making HTTP request: %s", err)
+		// Retrieve the contents of each URL. We'll spin each off into a
+		// goroutine and wait for all of them to finish before continuing.
+		var outputs = make(map[string]string)
+		var condvar sync.WaitGroup
+
+		for _, url := range args.URLs {
+			condvar.Add(1)
+			outputs[url] = "<not yet downloaded>"
+
+			go func(url string) {
+				defer condvar.Done()
+
+				output, err := util.HttpGetText(url)
+				if err != nil {
+					s.fail("Error making HTTP request: %s", err)
+				}
+
+				outputs[url] = output
+			}(url)
 		}
 
+		condvar.Wait()
+
+		// Construct the output string
+		buf := strings.Builder{}
+		for url, output := range outputs {
+			buf.WriteString(fmt.Sprintf("Contents of %s:\n\n%s\n", url, output))
+			buf.WriteString("-----\n\n")
+		}
+
+		// Append the output to the list of tool call outputs
 		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
 			ToolCallID: toolCallID,
-			Output:     fmt.Sprintf("Contents of %s:\n%s", args.URL, output),
+			Output:     buf.String(),
 		})
 
 	default:

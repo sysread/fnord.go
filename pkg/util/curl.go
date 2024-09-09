@@ -2,22 +2,48 @@ package util
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"strings"
 
 	"golang.org/x/net/html"
 )
 
-func HttpGet(url string) (string, error) {
+func HttpGet(url string) (io.ReadCloser, error) {
 	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
+}
+
+func HttpGetHTML(url string) (string, error) {
+	body, err := HttpGet(url)
 	if err != nil {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	defer body.Close()
+
+	html, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(html), nil
+}
+
+func HttpGetText(url string) (string, error) {
+	body, err := HttpGet(url)
+	if err != nil {
+		return "", err
+	}
+
+	defer body.Close()
 
 	// Parse the HTML body directly from the response body
-	doc, err := html.Parse(resp.Body)
+	doc, err := html.Parse(body)
 	if err != nil {
 		return "", err
 	}
