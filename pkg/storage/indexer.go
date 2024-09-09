@@ -76,67 +76,6 @@ func walkProjectDir(fn func(path string)) error {
 }
 
 // watchProjectDir sets up a recursive watcher for the project directory
-/*func watchProjectDir() error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-	//defer watcher.Close()
-
-	// Add initial directory and subdirectories
-	err = addDirRecursive(watcher, ProjectPath)
-	if err != nil {
-		return fmt.Errorf("failed to add directories to watcher: %v", err)
-	}
-
-	// Start watching in a goroutine
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-
-				// Handle file create, write, and rename events
-				if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Rename) != 0 {
-					// Ensure it's not a directory
-					info, err := os.Stat(event.Name)
-
-					if err != nil {
-						debug.Log("Error getting file info: %v", err)
-						continue
-					}
-
-					if info.IsDir() {
-						// If it's a directory, add it to the watcher recursively
-						if err = addDirRecursive(watcher, event.Name); err != nil {
-							debug.Log("Failed to add new directory to watcher: %v", err)
-						}
-					} else {
-						// Queue file for indexing
-						indexPath(event.Name)
-					}
-				}
-
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-
-				debug.Log("Watcher error: %v", err)
-			}
-		}
-	}()
-
-	// Block until the program exits
-	done := make(chan bool)
-	<-done
-
-	return nil
-}*/
-
-// watchProjectDir sets up a recursive watcher for the project directory
 func watchProjectDir() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
