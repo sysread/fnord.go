@@ -231,7 +231,7 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 
 				output, err := util.HttpGetText(url)
 				if err != nil {
-					s.fail("Error making HTTP request: %s", err)
+					outputs[url] = fmt.Sprintf("Error making HTTP request: %s", err)
 				}
 
 				outputs[url] = output
