@@ -5,10 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
-
-	"github.com/sysread/fnord/pkg/storage"
-	"github.com/sysread/fnord/pkg/util"
 )
 
 type streamer struct {
@@ -161,96 +157,37 @@ func (s *streamer) fail(msg string, args ...interface{}) {
 func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 	switch tool {
 	case "query_vector_db":
-		var query struct {
-			QueryText string `json:"query_text"`
-		}
-
-		if err := json.Unmarshal([]byte(argsJSON), &query); err != nil {
-			s.fail("Error unmarshalling query_vector_db args: %s", err)
-		}
-
-		results, err := storage.Search(query.QueryText, 10)
+		output, err := queryVectorDB(argsJSON)
 		if err != nil {
-			s.fail("Error searching storage: %s", err)
-		}
-
-		var output strings.Builder
-		for _, result := range results {
-			output.WriteString(result.String())
+			s.fail("Error querying vector DB: %s", err)
 		}
 
 		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
 			ToolCallID: toolCallID,
-			Output:     output.String(),
+			Output:     output,
 		})
 
 	case "query_project_files":
-		var query struct {
-			QueryText string `json:"query_text"`
-		}
-
-		if err := json.Unmarshal([]byte(argsJSON), &query); err != nil {
-			s.fail("Error unmarshalling query_project_files args: %s", err)
-		}
-
-		results, err := storage.SearchProject(query.QueryText, 10)
+		output, err := queryProjectFiles(argsJSON)
 		if err != nil {
-			s.fail("Error searching storage: %s", err)
-		}
-
-		var output strings.Builder
-		for _, result := range results {
-			output.WriteString(result.ProjectFileString())
+			s.fail("Error querying project files: %s", err)
 		}
 
 		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
 			ToolCallID: toolCallID,
-			Output:     output.String(),
+			Output:     output,
 		})
 
 	case "curl":
-		var args struct {
-			URLs []string `json:"urls"`
-		}
-
-		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-			s.fail("Error unmarshalling curl args: %s", err)
-		}
-
-		// Retrieve the contents of each URL. We'll spin each off into a
-		// goroutine and wait for all of them to finish before continuing.
-		var outputs = make(map[string]string)
-		var condvar sync.WaitGroup
-
-		for _, url := range args.URLs {
-			condvar.Add(1)
-			outputs[url] = "<not yet downloaded>"
-
-			go func(url string) {
-				defer condvar.Done()
-
-				output, err := util.HttpGetText(url)
-				if err != nil {
-					outputs[url] = fmt.Sprintf("Error making HTTP request: %s", err)
-				}
-
-				outputs[url] = output
-			}(url)
-		}
-
-		condvar.Wait()
-
-		// Construct the output string
-		buf := strings.Builder{}
-		for url, output := range outputs {
-			buf.WriteString(fmt.Sprintf("Contents of %s:\n\n%s\n", url, output))
-			buf.WriteString("-----\n\n")
+		output, err := curl(argsJSON)
+		if err != nil {
+			s.fail("Error querying project files: %s", err)
 		}
 
 		// Append the output to the list of tool call outputs
 		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
 			ToolCallID: toolCallID,
-			Output:     buf.String(),
+			Output:     output,
 		})
 
 	default:
