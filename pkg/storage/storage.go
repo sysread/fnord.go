@@ -60,12 +60,14 @@ func Init(config *config.Config) error {
 		return err
 	}
 
+	// Initialize the conversations collection
 	conversationsCollectionName := "conversations:" + config.Box
 	Conversations, err = DB.GetOrCreateCollection(conversationsCollectionName, nil, nil)
 	if err != nil {
 		return err
 	}
 
+	// Initialize the project files collection
 	if config.ProjectPath != "" {
 		gitPath := filepath.Join(config.ProjectPath, ".git")
 		if _, err := os.Stat(gitPath); err != nil {
@@ -88,6 +90,9 @@ func Init(config *config.Config) error {
 			go startIndexer()
 		}
 	}
+
+	// Initialize the facts collection
+	InitializeFactsCollection(config)
 
 	return nil
 }
@@ -196,6 +201,10 @@ func Search(query string, numResults int) ([]Result, error) {
 		numResults = maxResults
 	}
 
+	if numResults == 0 {
+		return []Result{}, nil
+	}
+
 	results, err := Conversations.Query(context.Background(), query, numResults, nil, nil)
 	if err != nil {
 		return nil, err
@@ -251,10 +260,4 @@ func (r *Result) String() string {
 	}
 
 	return fmt.Sprintf("Conversation from %s to %s:\n%s\n\n", created, updated, content)
-}
-
-func (r *Result) ProjectFileString() string {
-	path := r.ID
-	content := r.Content
-	return fmt.Sprintf("Project file: %s\n%s\n\n", path, content)
 }

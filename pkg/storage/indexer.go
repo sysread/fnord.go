@@ -304,3 +304,10 @@ func isGitIgnored(path string) bool {
 
 	return ProjectGitIgnored.MatchesPath(relpath)
 }
+
+// Result represents a search result
+func (r *Result) ProjectFileString() string {
+	path := r.ID
+	content := r.Content
+	return fmt.Sprintf("Project file: %s\n%s\n\n", path, content)
+}

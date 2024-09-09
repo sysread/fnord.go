@@ -155,42 +155,41 @@ func (s *streamer) fail(msg string, args ...interface{}) {
 }
 
 func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
+	var toolOutputString string
+	var err error
+
 	switch tool {
 	case "query_vector_db":
-		output, err := queryVectorDB(argsJSON)
-		if err != nil {
-			s.fail("Error querying vector DB: %s", err)
-		}
-
-		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
-			ToolCallID: toolCallID,
-			Output:     output,
-		})
+		toolOutputString, err = queryVectorDB(argsJSON)
 
 	case "query_project_files":
-		output, err := queryProjectFiles(argsJSON)
-		if err != nil {
-			s.fail("Error querying project files: %s", err)
-		}
-
-		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
-			ToolCallID: toolCallID,
-			Output:     output,
-		})
+		toolOutputString, err = queryProjectFiles(argsJSON)
 
 	case "curl":
-		output, err := curl(argsJSON)
-		if err != nil {
-			s.fail("Error querying project files: %s", err)
-		}
+		toolOutputString, err = curl(argsJSON)
 
-		// Append the output to the list of tool call outputs
-		s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
-			ToolCallID: toolCallID,
-			Output:     output,
-		})
+	case "save_fact":
+		toolOutputString, err = saveFact(argsJSON)
+
+	case "delete_fact":
+		toolOutputString, err = deleteFact(argsJSON)
+
+	case "update_fact":
+		toolOutputString, err = updateFact(argsJSON)
+
+	case "search_facts":
+		toolOutputString, err = searchFacts(argsJSON)
 
 	default:
 		s.fail("unhandled function call: %s", tool)
 	}
+
+	if err != nil {
+		s.fail("%s: %s", tool, err)
+	}
+
+	s.toolCallOutputs = append(s.toolCallOutputs, toolOutput{
+		ToolCallID: toolCallID,
+		Output:     toolOutputString,
+	})
 }
