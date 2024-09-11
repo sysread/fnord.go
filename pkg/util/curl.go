@@ -49,12 +49,12 @@ func HttpGetText(url string) (string, error) {
 	}
 
 	// Extract the innerText
-	return extractInnerText(doc), nil
+	return ExtractInnerText(doc), nil
 }
 
 // extractInnerText approximates the behavior of document.innerText by
 // extracting visible text from an HTML node.
-func extractInnerText(n *html.Node) string {
+func ExtractInnerText(n *html.Node) string {
 	var buf bytes.Buffer
 
 	var f func(*html.Node)
