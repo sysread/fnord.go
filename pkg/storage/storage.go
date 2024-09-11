@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/philippgille/chromem-go"
 	gitignore "github.com/sabhiram/go-gitignore"
 
@@ -130,12 +129,10 @@ func GetProjects() ([]string, error) {
 }
 
 // Create stores a new entry and returns its UUID
-func Create(content string) (string, error) {
-	id := uuid.New().String()
-
+func Create(threadID string, content string) error {
 	now := time.Now().Format(time.RFC3339)
 	document := chromem.Document{
-		ID:      id,
+		ID:      threadID,
 		Content: content,
 		Metadata: map[string]string{
 			"created": now,
@@ -145,10 +142,10 @@ func Create(content string) (string, error) {
 
 	err := Conversations.AddDocuments(context.Background(), []chromem.Document{document}, 2)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return id, nil
+	return nil
 }
 
 // Read retrieves content by UUID
@@ -166,7 +163,7 @@ func Update(id, content string) error {
 	// Find the existing entry
 	existingEntry, err := Conversations.GetByID(context.Background(), id)
 	if err != nil {
-		return err
+		return Create(id, content)
 	}
 
 	// Preserve the original creation date and generate a new updated date

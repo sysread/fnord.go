@@ -29,7 +29,6 @@ type ChatManager struct {
 	*messages.Conversation
 	fnord    *fnord.Fnord
 	threadID string
-	vectorID string
 }
 
 // NewChatManager creates a new ChatManager instance.
@@ -63,20 +62,10 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 		}
 	}
 
-	// If the conversation has no vector ID, create, otherwise, update the
-	// conversation on disk.
-	if cm.vectorID == "" {
-		vectorID, err := storage.Create(cm.ChatTranscript())
-		if err != nil {
-			panic(fmt.Sprintf("Error creating conversation: %#v", err))
-		}
-
-		cm.vectorID = vectorID
-	} else {
-		err := storage.Update(cm.vectorID, cm.ChatTranscript())
-		if err != nil {
-			panic(fmt.Sprintf("Error updating conversation: %#v", err))
-		}
+	// Store the conversation transcript
+	err := storage.Update(cm.threadID, cm.ChatTranscript())
+	if err != nil {
+		panic(fmt.Sprintf("Error updating conversation: %#v", err))
 	}
 }
 
