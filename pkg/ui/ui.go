@@ -17,6 +17,7 @@ type UI struct {
 	// Pages
 	home       tview.Primitive
 	help       tview.Primitive
+	logs	   *logView
 	chat       *chatView
 	filePicker *filePicker
 }
@@ -45,9 +46,11 @@ func New() *UI {
 	ui.help = ui.newHelpView()
 	ui.chat = ui.newChatView()
 	ui.filePicker = ui.newFilePicker()
+	ui.logs = ui.newLogsView()
 
 	ui.pages.AddPage("home", ui.home, true, true)
 	ui.pages.AddPage("help", ui.help, true, true)
+	ui.pages.AddPage("logs", ui.logs, true, true)
 	ui.pages.AddPage("chat", ui.chat, true, true)
 	ui.pages.AddPage("filePicker", ui.filePicker, true, true)
 
@@ -59,12 +62,7 @@ func New() *UI {
 	return ui
 }
 
-func (ui *UI) SetStatus(status string) {
-	ui.status.SetText(status)
-}
-
 func (ui *UI) Run() {
-	//ui.OpenHome()
 	ui.OpenChat()
 
 	if err := ui.app.Run(); err != nil {
@@ -74,6 +72,10 @@ func (ui *UI) Run() {
 
 func (ui *UI) Quit() {
 	ui.app.Stop()
+}
+
+func (ui *UI) SetStatus(status string) {
+	ui.status.SetText(status)
 }
 
 func (ui *UI) CurrentPage() string {
@@ -102,4 +104,9 @@ func (ui *UI) OpenFilePicker(prompt string, path string, callback func(string)) 
 	ui.Open("filePicker")
 	ui.filePicker.Setup(prompt, path, callback)
 	ui.app.SetFocus(ui.filePicker.GetInitialFocus())
+}
+
+func (ui *UI) OpenLogs() {
+	ui.Open("logs")
+	ui.app.SetFocus(ui.logs)
 }

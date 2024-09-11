@@ -98,6 +98,7 @@ func (ui *UI) newChatView() *chatView {
 			{"space, enter", "select, copy (in msgs)"},
 			{"ctrl-/", "help"},
 			{"esc", "home"},
+			{"F10", "logs"},
 		},
 	})
 
@@ -111,6 +112,7 @@ func (ui *UI) newChatView() *chatView {
 
 			ui.OpenHome()
 			return nil
+
 		case tcell.KeyBacktab:
 			if cv.ui.app.GetFocus() == cv.userInput {
 				cv.FocusMessageList()
@@ -118,9 +120,15 @@ func (ui *UI) newChatView() *chatView {
 				cv.FocusUserInput()
 			}
 			return nil
+
 		// This is actually Ctrl-/
 		case tcell.KeyCtrlUnderscore:
 			cv.toggleHelp()
+			return nil
+
+		case tcell.KeyF10:
+			cv.ui.OpenLogs()
+			return nil
 		}
 
 		return event

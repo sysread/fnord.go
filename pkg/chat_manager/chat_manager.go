@@ -50,7 +50,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 	}
 
 	// Store the conversation transcript
-	err := storage.Update(cm.threadID, cm.ChatTranscript())
+	err := storage.UpdateConversation(cm.threadID, cm.ChatTranscript())
 	if err != nil {
 		panic(fmt.Sprintf("Error updating conversation: %#v", err))
 	}
@@ -73,6 +73,7 @@ func (cm *ChatManager) RequestResponse(onChunkReceived, onStatusReceived func(st
 		// Collect the streaming response
 		for chunk := range responseChan {
 			statusRe := regexp.MustCompile(`STATUS:\s*(.*)`)
+
 			if statusRe.MatchString(chunk) {
 				status := statusRe.FindStringSubmatch(chunk)[1]
 				onStatusReceived(status)

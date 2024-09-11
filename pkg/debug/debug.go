@@ -7,19 +7,24 @@ import (
 )
 
 var (
-	logFile  *os.File
-	logMutex sync.Mutex
-	logger   *log.Logger
+	logFile    *os.File
+	logMutex   sync.Mutex
+	logger     *log.Logger
+	LogChannel chan string
 )
 
 func Init() error {
 	var err error
+
 	logFile, err = os.OpenFile("debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
 
 	logger = log.New(logFile, "", log.Ldate|log.Ltime)
+
+	LogChannel = make(chan string, 10)
+
 	return nil
 }
 

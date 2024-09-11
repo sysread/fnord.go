@@ -12,6 +12,7 @@ Key bindings:
 	[blue]     c[-] - Start a new chat
 
 	[blue]     ?[-] - Show this help
+	[blue]   F10[-] - Display logs
 	[blue]Escape[-] - Quit the application
 	`
 

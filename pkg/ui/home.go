@@ -9,14 +9,18 @@ func (ui *UI) newHomeView() tview.Primitive {
 	home := tview.NewFlex()
 
 	home.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+		switch event.Key() {
+		case tcell.KeyEscape:
 			ui.Quit()
-		} else {
+
+		default:
 			switch event.Rune() {
 			case 'q':
 				ui.Quit()
+
 			case '?':
 				ui.OpenHelp()
+
 			case 'c':
 				ui.OpenChat()
 			}
@@ -30,6 +34,7 @@ func (ui *UI) newHomeView() tview.Primitive {
 		keys: []keyBinding{
 			{"c", "chat"},
 			{"?", "help"},
+			{"F10", "logs"},
 			{"q, esc", "quit"},
 		},
 	})

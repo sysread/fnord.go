@@ -12,7 +12,7 @@ import (
 
 func getToolStatusLine(toolName string) string {
 	switch toolName {
-	case "query_vector_db":
+	case "query_conversations":
 		return "Checking past conversations..."
 	case "query_project_files":
 		return "Searching project files..."
@@ -31,7 +31,7 @@ func getToolStatusLine(toolName string) string {
 	}
 }
 
-func queryVectorDB(argsJSON string) (string, error) {
+func queryConversations(argsJSON string) (string, error) {
 	var query struct {
 		QueryText string `json:"query_text"`
 	}
@@ -40,7 +40,7 @@ func queryVectorDB(argsJSON string) (string, error) {
 		return "", fmt.Errorf("query_vector_db: error unmarshalling args: %s", err)
 	}
 
-	results, err := storage.Search(query.QueryText, 10)
+	results, err := storage.SearchConversations(query.QueryText, 10)
 	if err != nil {
 		return "", fmt.Errorf("query_vector_db: error searching storage: %s", err)
 	}

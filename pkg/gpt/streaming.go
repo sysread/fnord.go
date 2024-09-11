@@ -74,7 +74,6 @@ LINE:
 			switch event {
 			case "done":
 				if data == "[DONE]" {
-					s.finish()
 					break LINE
 				}
 
@@ -114,6 +113,10 @@ LINE:
 					s.fail("Error submitting tool outputs: %s", err)
 					return
 				}
+
+				// Clear tool call outputs so that they do not get re-submitted
+				// if the assistant requests further tool outputs.
+				s.toolCallOutputs = nil
 
 				// Replace `run` with the response body reader returned by
 				// `SubmitToolOutputs`, which will continue streaming the
@@ -160,8 +163,8 @@ func (s *streamer) addToolCallOutput(toolCallID, tool, argsJSON string) {
 	var err error
 
 	switch tool {
-	case "query_vector_db":
-		toolOutputString, err = queryVectorDB(argsJSON)
+	case "query_conversations":
+		toolOutputString, err = queryConversations(argsJSON)
 
 	case "query_project_files":
 		toolOutputString, err = queryProjectFiles(argsJSON)

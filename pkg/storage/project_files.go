@@ -12,10 +12,95 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/h2non/filetype"
 	"github.com/philippgille/chromem-go"
+	gitignore "github.com/sabhiram/go-gitignore"
 
+	"github.com/sysread/fnord/pkg/config"
 	"github.com/sysread/fnord/pkg/debug"
 )
 
+// Project path is the path to a project directory, selected by the user via
+// the --project flag, to be indexed by the service. This is optional. If
+// unset, the service will not index a project directory.
+var ProjectPath string
+
+// ProjectFiles is the chromem collection of files in the project directory
+var ProjectFiles *chromem.Collection
+
+// ProjectGitIgnored is the gitignore parser for the project directory
+var ProjectGitIgnored *gitignore.GitIgnore
+
+func InitializeProjectFilesCollection(config *config.Config) error {
+	var err error
+
+	gitPath := filepath.Join(config.ProjectPath, ".git")
+	if _, err := os.Stat(gitPath); err != nil {
+		return fmt.Errorf("project path %s is not a git repository", config.ProjectPath)
+	}
+
+	ProjectPath = config.ProjectPath
+
+	collectionName := fmt.Sprintf("project_files:%s", ProjectPath)
+	ProjectFiles, err = DB.GetOrCreateCollection(collectionName, nil, nil)
+	if err != nil {
+		debug.Log("Error creating %s collection: %v", collectionName, err)
+	} else {
+		// Load the .gitignore file
+		ProjectGitIgnored, err = gitignore.CompileIgnoreFile(filepath.Join(ProjectPath, ".gitignore"))
+		if err != nil {
+			return err
+		}
+
+		go startIndexer()
+	}
+
+	return nil
+}
+
+// Function to list all projects' collections
+func GetProjects() ([]string, error) {
+	collections := DB.ListCollections()
+	var projects []string
+
+	for name := range collections {
+		// We exclude project files' collections based on their naming pattern
+		if strings.HasPrefix(name, "project_files:") {
+			name = strings.TrimPrefix(name, "project_files:")
+			projects = append(projects, name)
+		}
+	}
+
+	return projects, nil
+}
+
+// Searches the project file index for the given query and returns the results.
+func SearchProject(query string, numResults int) ([]Result, error) {
+	if ProjectFiles == nil {
+		return []Result{}, nil
+	}
+
+	maxResults := ProjectFiles.Count()
+	if numResults > maxResults {
+		numResults = maxResults
+	}
+
+	results, err := ProjectFiles.Query(context.Background(), query, numResults, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var found []Result
+	for _, doc := range results {
+		found = append(found, Result{
+			ID:      doc.ID,
+			Content: doc.Content,
+		})
+	}
+
+	return found, nil
+}
+
+// startIndexer initializes the project file indexer and starts watching the
+// project directory for changes.
 func startIndexer() {
 	debug.Log("Indexing project directory %s", ProjectPath)
 

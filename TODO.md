@@ -1,7 +1,6 @@
 # TODO
 
 - feedback when assistant is being updated
-- feedback while tools are being run
 - log tab
 - list facts by box
 - delete "box"
