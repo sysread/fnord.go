@@ -19,6 +19,9 @@ type tviewRenderer struct {
 	// Block quote rendering
 	blockQuoteLevel int
 
+	// List rendering
+	nestingLevel int
+
 	// Table rendering
 	columnWidths []int
 	tableHeader  []string
@@ -108,7 +111,7 @@ func (r *tviewRenderer) NewLine(w io.Writer) *tviewRenderer {
 }
 
 func (r *tviewRenderer) Bullet(w io.Writer) *tviewRenderer {
-	return r.Write(w, "•")
+	return r.Write(w, "-")
 }
 
 func (r *tviewRenderer) Hash(w io.Writer) *tviewRenderer {
@@ -140,11 +143,16 @@ func (r *tviewRenderer) RenderNode(w io.Writer, node *blackfriday.Node, entering
 		}
 
 	case blackfriday.List:
-		r.NewLine(w)
+		if entering {
+			r.nestingLevel++ // Increase nesting level
+		} else {
+			r.nestingLevel-- // Decrease nesting level
+			r.NewLine(w)
+		}
 
 	case blackfriday.Item:
 		if entering {
-			r.Bullet(w).Space(w)
+			r.renderBullet(w).Space(w)
 		}
 
 	case blackfriday.Paragraph:
@@ -345,6 +353,14 @@ func (r *tviewRenderer) renderTable(w io.Writer) *tviewRenderer {
 	r.tableRows = nil
 
 	return r
+}
+
+func (r *tviewRenderer) renderBullet(w io.Writer) *tviewRenderer {
+	for i := 0; i < r.nestingLevel; i++ {
+		r.Space(w).Space(w) // Indent two spaces for each level of nesting
+	}
+
+	return r.Bullet(w)
 }
 
 func (r *tviewRenderer) renderLink(w io.Writer, uri []byte) *tviewRenderer {
