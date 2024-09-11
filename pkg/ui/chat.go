@@ -91,7 +91,7 @@ func (ui *UI) newChatView() *chatView {
 	cv.container.AddItem(cv.chatFlex, 0, 1, false)
 
 	cv.Frame = ui.newScreen(cv.container, screenArgs{
-		title: "Chat: " + ui.Fnord.Config.Box,
+		title: cv.getTitle(),
 		keys: []keyBinding{
 			{"ctrl-space", "sends"},
 			{"shift-tab", "switches focus"},
@@ -137,6 +137,17 @@ func (ui *UI) newChatView() *chatView {
 	cv.readyToSend()
 
 	return cv
+}
+
+func (cv *chatView) getTitle() string {
+	box := cv.ui.Fnord.Config.Box
+
+	project := cv.ui.Fnord.Config.ProjectPath
+	if project == "" {
+		project = "(none)"
+	}
+
+	return fmt.Sprintf("Chat | Box: %s | Project: %s", box, project)
 }
 
 func (cv *chatView) readyToSend() {

@@ -142,6 +142,10 @@ func (c *Config) validateBox() *Config {
 }
 
 func (c *Config) validateProjectPath() *Config {
+	if c.ProjectPath == "" {
+		return c
+	}
+
 	if c.ProjectPath != "" && !pathExists(c.ProjectPath) {
 		die("Project path does not exist (%s)", c.ProjectPath)
 	}

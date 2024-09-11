@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"time"
-
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
@@ -24,6 +22,9 @@ func (ui *UI) newLogsView() *logView {
 		switch event.Key() {
 		case tcell.KeyEscape:
 			ui.Quit()
+
+		case tcell.KeyF10:
+			ui.OpenChat()
 
 		default:
 			switch event.Rune() {
@@ -52,7 +53,6 @@ func (ui *UI) newLogsView() *logView {
 		flex:      flex,
 		logBuffer: logBuffer,
 
-		// TODO implement keybindings
 		Frame: ui.newScreen(flex, screenArgs{
 			title: "Logs",
 			keys: []keyBinding{
@@ -63,22 +63,17 @@ func (ui *UI) newLogsView() *logView {
 		}),
 	}
 
-	go lv.startLogReader()
+	lv.startLogReader()
 
 	return lv
 }
 
 func (lv *logView) startLogReader() {
-	// Wait until the log channel is initialized
-	for {
-		if debug.LogChannel == nil {
-			debug.Log("Waiting for log channel to be initialized")
-			time.Sleep(200 * time.Millisecond)
+	go func() {
+		for line := range debug.LogChannel {
+			lv.ui.app.QueueUpdateDraw(func() {
+				lv.logBuffer.Write([]byte(line + "\n"))
+			})
 		}
-	}
-
-	out := lv.logBuffer.BatchWriter()
-	for line := range debug.LogChannel {
-		out.Write([]byte(line + "\n"))
-	}
+	}()
 }

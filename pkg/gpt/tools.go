@@ -47,7 +47,7 @@ func queryConversations(argsJSON string) (string, error) {
 
 	var output strings.Builder
 	for _, result := range results {
-		output.WriteString(result.String())
+		output.WriteString(result.ConversationString())
 	}
 
 	return output.String(), nil
@@ -144,7 +144,7 @@ func updateFact(argsJSON string) (string, error) {
 		return "", fmt.Errorf("update_fact: error unmarshalling args: %s", err)
 	}
 
-	if err := storage.UpdateFact(info.ID, info.Content); err != nil {
+	if _, err := storage.UpdateFact(info.ID, info.Content); err != nil {
 		return "", fmt.Errorf("update_fact: error updating fact: %s", err)
 	}
 

@@ -53,9 +53,11 @@ func (c *OpenAIClient) initAssistant() error {
 	}
 
 	debug.Log("Found Assistant: %s", AssistantID)
-	debug.Log("      - Version: %s", AssistantVersion)
+	debug.Log("Assistant version: %s (current version: %s)", AssistantVersion, desiredAssistantVersion)
 
-	if AssistantVersion != desiredAssistantVersion {
+	if AssistantVersion == desiredAssistantVersion {
+		debug.Log("Assistant is up to date")
+	} else {
 		debug.Log("Updating Assistant to version %s", desiredAssistantVersion)
 		return c.updateAssistant()
 	}

@@ -2,7 +2,6 @@
 package storage
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -77,17 +76,4 @@ func GetBoxes() ([]string, error) {
 	}
 
 	return boxes, nil
-}
-
-// Returns a string representation of a search result.
-func (r *Result) String() string {
-	content := r.Content
-	created := r.Created
-	updated := r.Updated
-
-	if updated == "" {
-		return fmt.Sprintf("Conversation on %s:\n%s\n\n", created, content)
-	}
-
-	return fmt.Sprintf("Conversation from %s to %s:\n%s\n\n", created, updated, content)
 }

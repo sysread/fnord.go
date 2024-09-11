@@ -30,6 +30,7 @@ var ProjectFiles *chromem.Collection
 var ProjectGitIgnored *gitignore.GitIgnore
 
 func InitializeProjectFilesCollection(config *config.Config) error {
+	debug.Log("Initializing project files collection from root path %s", config.ProjectPath)
 	var err error
 
 	gitPath := filepath.Join(config.ProjectPath, ".git")
@@ -74,6 +75,8 @@ func GetProjects() ([]string, error) {
 
 // Searches the project file index for the given query and returns the results.
 func SearchProject(query string, numResults int) ([]Result, error) {
+	debug.Log("Searching project files for %d results using query: '%s'", numResults, query)
+
 	if ProjectFiles == nil {
 		return []Result{}, nil
 	}
@@ -83,13 +86,21 @@ func SearchProject(query string, numResults int) ([]Result, error) {
 		numResults = maxResults
 	}
 
+	if numResults == 0 {
+		debug.Log("No indexed project files to search!")
+		return []Result{}, nil
+	}
+
 	results, err := ProjectFiles.Query(context.Background(), query, numResults, nil, nil)
 	if err != nil {
+		debug.Log("Error querying project files: %v", err)
 		return nil, err
 	}
 
 	var found []Result
 	for _, doc := range results {
+		debug.Log("Found project file: %s", doc.ID)
+
 		found = append(found, Result{
 			ID:      doc.ID,
 			Content: doc.Content,

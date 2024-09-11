@@ -1,10 +1,8 @@
 # TODO
 
 - feedback when assistant is being updated
-- log tab
 - list facts by box
 - delete "box"
-- status while thread is running
 - (?) some equivalent of `cmd`
 
 
@@ -13,7 +11,6 @@
 ## Logical
 
 ## UI/UX
-- display currently selected project
 - cursor highlight retained on screen when in selection mode
 
 ## Textsel
