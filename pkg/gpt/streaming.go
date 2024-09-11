@@ -100,6 +100,7 @@ LINE:
 
 				// Collect tool call outputs
 				for _, toolCall := range action.RequiredAction.SubmitToolOutputs.ToolCalls {
+					responseChan <- fmt.Sprintf("STATUS: %s", getToolStatusLine(toolCall.Function.Name))
 					s.addToolCallOutput(
 						toolCall.ID,
 						toolCall.Function.Name,

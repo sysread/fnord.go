@@ -126,7 +126,21 @@ func (ui *UI) newChatView() *chatView {
 		return event
 	})
 
+	cv.readyToSend()
+
 	return cv
+}
+
+func (cv *chatView) readyToSend() {
+	cv.ui.SetStatus("[#000000:blue:b]Ready to send[-:-:-]")
+}
+
+func (cv *chatView) assistantIsTyping() {
+	cv.ui.SetStatus("[#000000:green:b]Assistant is typing...[-:-:-]")
+}
+
+func (cv *chatView) setStatusFromAssistant(status string) {
+	cv.ui.SetStatus("[#000000:green:b]" + status + "[-:-:-]")
 }
 
 func (cv *chatView) GetInitialFocus() tview.Primitive {
@@ -185,6 +199,7 @@ func (cv *chatView) FocusMessageList() {
 
 func (cv *chatView) ToggleReceiving() {
 	if cv.isReceiving {
+		cv.readyToSend()
 		lastMessage := cv.chatMgr.LastMessage()
 		if lastMessage != nil {
 			cv.container.RemoveItem(cv.receivingBuffer)
@@ -196,6 +211,7 @@ func (cv *chatView) ToggleReceiving() {
 			cv.messageList.ScrollToEnd()
 		}
 	} else {
+		cv.assistantIsTyping()
 		cv.receivingBuffer.SetText(cv.messageList.GetText(false))
 		cv.container.RemoveItem(cv.chatFlex)
 		cv.container.AddItem(cv.receivingBuffer, 0, 1, false)
@@ -262,10 +278,22 @@ func (cv *chatView) onSubmit() {
 	// Get the assistant's response
 	cv.ToggleReceiving()
 	cv.queueAppendText(AssistantMsgHeader)
-	cv.chatMgr.RequestResponse(func(chunk string) {
+	cv.chatMgr.RequestResponse(
 		// Append the assistant's response to the chat view
-		cv.queueAppendText(chunk)
-	})
+		func(chunk string) {
+			cv.ui.app.QueueUpdateDraw(func() {
+				cv.assistantIsTyping()
+			})
+
+			cv.queueAppendText(chunk)
+		},
+		// Update the status message
+		func(status string) {
+			cv.ui.app.QueueUpdateDraw(func() {
+				cv.setStatusFromAssistant(status)
+			})
+		},
+	)
 
 	// Now that the response is complete, append a few newlines to separate it
 	// from the next user message and scroll to the end of the chat view.

@@ -9,8 +9,10 @@ import (
 type UI struct {
 	Fnord *fnord.Fnord
 
-	app   *tview.Application
-	pages *tview.Pages
+	app    *tview.Application
+	frame  *tview.Flex
+	status *tview.TextView
+	pages  *tview.Pages
 
 	// Pages
 	home       tview.Primitive
@@ -23,10 +25,20 @@ func New() *UI {
 	app := tview.NewApplication()
 	app.EnableMouse(true)
 
+	frame := tview.NewFlex().
+		SetDirection(tview.FlexRow)
+
+	status := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
+	status.SetText("Loading...")
+
 	ui := &UI{
-		Fnord: fnord.NewFnord(),
-		app:   app,
-		pages: tview.NewPages(),
+		Fnord:  fnord.NewFnord(),
+		app:    app,
+		frame:  frame,
+		status: status,
+		pages:  tview.NewPages(),
 	}
 
 	ui.home = ui.newHomeView()
@@ -39,9 +51,16 @@ func New() *UI {
 	ui.pages.AddPage("chat", ui.chat, true, true)
 	ui.pages.AddPage("filePicker", ui.filePicker, true, true)
 
-	ui.app.SetRoot(ui.pages, true).SetFocus(ui.pages)
+	ui.frame.AddItem(ui.pages, 0, 1, true)
+	ui.frame.AddItem(ui.status, 1, 0, false)
+
+	ui.app.SetRoot(ui.frame, true).SetFocus(ui.pages)
 
 	return ui
+}
+
+func (ui *UI) SetStatus(status string) {
+	ui.status.SetText(status)
 }
 
 func (ui *UI) Run() {

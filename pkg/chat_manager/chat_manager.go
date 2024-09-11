@@ -2,26 +2,13 @@ package chat_manager
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/sysread/fnord/pkg/fnord"
 	"github.com/sysread/fnord/pkg/messages"
 	"github.com/sysread/fnord/pkg/storage"
 )
-
-const systemSummaryPrompt = `
-Your job is to summarize a conversation.
-It is essential that you identify all significant facts in the conversation transcript.
-You will assemble a nested an outline of this conversation in markdown format.
-If there is file content present, be sure to include the file path and an individual summary of the file content as a distinct set of nested list items.
-If there is command output, include the command, a the relevance of its output, and then VERY tersely summarize how it relates to the conversation.
-If a problem was solved in the conversation, DEFINITELY include the details of the problem and solution, as well as the steps taken to troubleshoot.
-Respond ONLY with a summary of the discussion, followed by your outline of ALL facts identified in the conversation.
-`
-
-const searchQueryPrompt = `
-Take the user input and respond ONLY with a very short query string to use RAG to identify matching entries.
-`
 
 // ChatManager manages a conversation and provides methods for interacting with
 // the conversation.
@@ -71,7 +58,7 @@ func (cm *ChatManager) AddMessage(msg messages.Message) {
 
 // RequestResponse sends the user's input to the assistant and processes the
 // response.
-func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
+func (cm *ChatManager) RequestResponse(onChunkReceived, onStatusReceived func(string)) {
 	done := make(chan bool)
 
 	// Buffer to collect the streaming response
@@ -85,12 +72,17 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	go func() {
 		// Collect the streaming response
 		for chunk := range responseChan {
+			statusRe := regexp.MustCompile(`STATUS:\s*(.*)`)
+			if statusRe.MatchString(chunk) {
+				status := statusRe.FindStringSubmatch(chunk)[1]
+				onStatusReceived(status)
+			} else {
+				// Append the chunk to the buffer
+				buf.WriteString(chunk)
 
-			// Append the chunk to the buffer
-			buf.WriteString(chunk)
-
-			// Send the chunk to the caller-supplied callback function
-			onChunkReceived(chunk)
+				// Send the chunk to the caller-supplied callback function
+				onChunkReceived(chunk)
+			}
 		}
 
 		// Finally, add the full response to the conversation. This will
@@ -106,10 +98,4 @@ func (cm *ChatManager) RequestResponse(onChunkReceived func(string)) {
 	go cm.fnord.GptClient.RunThread(cm.threadID, responseChan)
 
 	<-done
-}
-
-// Generates a summary of the conversation transcript using the fast model.
-func (cm *ChatManager) GenerateSummary() (string, error) {
-	userPrompt := cm.ChatTranscript()
-	return cm.fnord.GptClient.GetCompletion(systemSummaryPrompt, userPrompt)
 }

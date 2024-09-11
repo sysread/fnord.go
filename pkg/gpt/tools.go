@@ -10,6 +10,27 @@ import (
 	"github.com/sysread/fnord/pkg/util"
 )
 
+func getToolStatusLine(toolName string) string {
+	switch toolName {
+	case "query_vector_db":
+		return "Checking past conversations..."
+	case "query_project_files":
+		return "Searching project files..."
+	case "curl":
+		return "Downloading content from the web..."
+	case "save_fact":
+		return "Saving a new fact..."
+	case "update_fact":
+		return "Updating a saved fact..."
+	case "delete_fact":
+		return "Deleting a saved fact..."
+	case "search_facts":
+		return "Searching saved facts..."
+	default:
+		return "Executing " + toolName + "..."
+	}
+}
+
 func queryVectorDB(argsJSON string) (string, error) {
 	var query struct {
 		QueryText string `json:"query_text"`
