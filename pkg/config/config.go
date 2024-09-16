@@ -59,7 +59,7 @@ func (c *Config) Usage() {
 	fmt.Println("  Environment variables can be used to set some configuration options.")
 	fmt.Println("  Command-line options take precedence over environment variables.")
 	fmt.Println("")
-	fmt.Println("    FNORD_OPENAI_API_KEY  OpenAI API key (required)")
+	fmt.Println("    OPENAI_API_KEY	       OpenAI API key (required)")
 	fmt.Println("    FNORD_HOME            Base directory for storage (default: $HOME/.config/fnord)")
 	fmt.Println("    FNORD_BOX             Name of the box to use (same as --box)")
 	fmt.Println("    FNORD_PROJECT_PATH    Path to the project directory (same as --project)")
@@ -89,7 +89,7 @@ func (c *Config) ReadCommandLineOptions() *Config {
 }
 
 func (c *Config) SetEnvOptions() *Config {
-	c.OpenAIApiKey = os.Getenv("FNORD_OPENAI_API_KEY")
+	c.OpenAIApiKey = os.Getenv("OPENAI_API_KEY")
 	c.Box = os.Getenv("FNORD_BOX")
 	c.ProjectPath = os.Getenv("FNORD_PROJECT_PATH")
 
@@ -128,7 +128,7 @@ func (c *Config) SetTestingOverrides() *Config {
 
 func (c *Config) validateOpenAIApiKey() *Config {
 	if c.OpenAIApiKey == "" {
-		die("FNORD_OPENAI_API_KEY must be set in the shell environment")
+		die("OPENAI_API_KEY must be set in the shell environment")
 	}
 
 	return c

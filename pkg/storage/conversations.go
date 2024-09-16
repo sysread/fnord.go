@@ -64,6 +64,9 @@ func UpdateConversation(threadID, content string) error {
 		return CreateConversation(threadID, content)
 	}
 
+	// Set the document ID
+	existingEntry.ID = threadID
+
 	// Update the content
 	existingEntry.Content = content
 
