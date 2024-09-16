@@ -75,10 +75,15 @@ func (c *Config) Usage() {
 //------------------------------------------------------------------------------
 
 func (c *Config) ReadCommandLineOptions() *Config {
+	defaultBox := DefaultBox
+	if c.Box != "" {
+		defaultBox = c.Box
+	}
+
 	pflag.BoolVarP(&c.Help, "help", "h", false, "display this help message")
 	pflag.BoolVarP(&c.Testing, "testing", "t", false, "enable testing mode (forces --box to be 'testing')")
-	pflag.StringVarP(&c.Box, "box", "b", DefaultBox, "boxes are isolated workspaces; conversations held within a box are isolated from other boxes")
-	pflag.StringVarP(&c.ProjectPath, "project", "p", "", "path to the project directory; it will be indexed to make available for the assistant")
+	pflag.StringVarP(&c.Box, "box", "b", defaultBox, "boxes are isolated workspaces; conversations held within a box are isolated from other boxes")
+	pflag.StringVarP(&c.ProjectPath, "project", "p", c.ProjectPath, "path to the project directory; it will be indexed to make available for the assistant")
 	pflag.Parse()
 	return c
 }
