@@ -17,3 +17,4 @@
 - feature: `/` to search
 - bug: page up/down is not moving the cursor onto the visible screen
 - bug: format codes showing at cursor location when cursor is at the beginning of a change in formatting
+- bug: when copying text that contains square brackets, they are being stripped from the paste buffer output because tview is interpreting them as format codes

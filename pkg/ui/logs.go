@@ -72,7 +72,8 @@ func (lv *logView) startLogReader() {
 	go func() {
 		for line := range debug.LogChannel {
 			lv.ui.app.QueueUpdateDraw(func() {
-				lv.logBuffer.Write([]byte(line + "\n"))
+				line = tview.Escape(line) + "\n"
+				lv.logBuffer.Write([]byte(line))
 			})
 		}
 	}()

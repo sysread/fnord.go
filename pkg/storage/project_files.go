@@ -30,11 +30,12 @@ var ProjectFiles *chromem.Collection
 var ProjectGitIgnored *gitignore.GitIgnore
 
 func InitializeProjectFilesCollection(config *config.Config) error {
-	debug.Log("Initializing project files collection from root path %s", config.ProjectPath)
+	debug.Log("[storage] [project] Initializing project files collection from root path %s", config.ProjectPath)
 	var err error
 
 	gitPath := filepath.Join(config.ProjectPath, ".git")
 	if _, err := os.Stat(gitPath); err != nil {
+		debug.Log("[storage] [project] Project path %s is not a git repository", config.ProjectPath)
 		return fmt.Errorf("project path %s is not a git repository", config.ProjectPath)
 	}
 
@@ -43,7 +44,7 @@ func InitializeProjectFilesCollection(config *config.Config) error {
 	collectionName := fmt.Sprintf("project_files:%s", ProjectPath)
 	ProjectFiles, err = DB.GetOrCreateCollection(collectionName, nil, nil)
 	if err != nil {
-		debug.Log("Error creating %s collection: %v", collectionName, err)
+		debug.Log("[storage] [project] Error creating %s collection: %v", collectionName, err)
 	} else {
 		// Load the .gitignore file
 		ProjectGitIgnored, err = gitignore.CompileIgnoreFile(filepath.Join(ProjectPath, ".gitignore"))
@@ -75,7 +76,7 @@ func GetProjects() ([]string, error) {
 
 // Searches the project file index for the given query and returns the results.
 func SearchProject(query string, numResults int) ([]Result, error) {
-	debug.Log("Searching project files for %d results using query: '%s'", numResults, query)
+	debug.Log("[storage] [project] Searching project files for %d results using query: '%s'", numResults, query)
 
 	if ProjectFiles == nil {
 		return []Result{}, nil
@@ -87,19 +88,19 @@ func SearchProject(query string, numResults int) ([]Result, error) {
 	}
 
 	if numResults == 0 {
-		debug.Log("No indexed project files to search!")
+		debug.Log("[storage] [project] No indexed project files to search!")
 		return []Result{}, nil
 	}
 
 	results, err := ProjectFiles.Query(context.Background(), query, numResults, nil, nil)
 	if err != nil {
-		debug.Log("Error querying project files: %v", err)
+		debug.Log("[storage] [project] Error querying project files: %v", err)
 		return nil, err
 	}
 
 	var found []Result
 	for _, doc := range results {
-		debug.Log("Found project file: %s", doc.ID)
+		debug.Log("[storage] [project] Found project file: %s", doc.ID)
 
 		found = append(found, Result{
 			ID:      doc.ID,
@@ -113,15 +114,15 @@ func SearchProject(query string, numResults int) ([]Result, error) {
 // startIndexer initializes the project file indexer and starts watching the
 // project directory for changes.
 func startIndexer() {
-	debug.Log("Indexing project directory %s", ProjectPath)
+	debug.Log("[storage] [project] Indexing project directory %s", ProjectPath)
 
 	if ProjectPath == "" {
-		debug.Log("ProjectPath not set")
+		debug.Log("[storage] [project] ProjectPath not set")
 		return
 	}
 
 	if ProjectFiles == nil {
-		debug.Log("ProjectFiles collection not initialized")
+		debug.Log("[storage] [project] ProjectFiles collection not initialized")
 		return
 	}
 
@@ -201,14 +202,14 @@ func watchProjectDir() error {
 					info, err := os.Stat(event.Name)
 
 					if err != nil {
-						debug.Log("Error getting file info: %v", err)
+						debug.Log("[storage] [project] Error getting file info: %v", err)
 						continue
 					}
 
 					if info.IsDir() {
 						// If it's a directory, add it to the watcher recursively
 						if err = addDirRecursive(watcher, event.Name); err != nil {
-							debug.Log("Failed to add new directory to watcher: %v", err)
+							debug.Log("[storage] [project] Failed to add new directory to watcher: %v", err)
 						}
 					} else {
 						// Queue file for indexing
@@ -217,7 +218,7 @@ func watchProjectDir() error {
 
 				case event.Op&fsnotify.Remove != 0:
 					// Handle file/directory removal
-					debug.Log("File or directory removed: %s", event.Name)
+					debug.Log("[storage] [project] File or directory removed: %s", event.Name)
 
 					info, err := os.Stat(event.Name)
 					if err != nil {
@@ -228,7 +229,7 @@ func watchProjectDir() error {
 
 					if info.IsDir() {
 						watcher.Remove(event.Name)
-						debug.Log("Deleted directory removed from watcher: %s", event.Name)
+						debug.Log("[storage] [project] Deleted directory removed from watcher: %s", event.Name)
 					} else {
 						// Remove from index
 						removeFromIndex(event.Name)
@@ -239,7 +240,7 @@ func watchProjectDir() error {
 					return
 				}
 
-				debug.Log("Watcher error: %v", err)
+				debug.Log("[storage] [project] Watcher error: %v", err)
 			}
 		}
 	}()
@@ -272,7 +273,7 @@ func addDirRecursive(watcher *fsnotify.Watcher, dir string) error {
 				return err
 			}
 
-			debug.Log("Watching directory: %s", path)
+			debug.Log("[storage] [project] Watching directory: %s", path)
 		}
 
 		return nil
@@ -286,22 +287,22 @@ func indexPath(path string) {
 
 	doc, err := toChromemDocument(path)
 	if err != nil {
-		debug.Log("Error converting file to document: %v", err)
+		debug.Log("[storage] [project] Error converting file to document: %v", err)
 		return
 	}
 
-	debug.Log("  - index: %s", path)
+	debug.Log("[storage] [project]   - index: %s", path)
 	ProjectFiles.AddDocuments(context.Background(), []chromem.Document{doc}, 2)
 }
 
 func removeFromIndex(path string) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		debug.Log("Error getting absolute path: %v", err)
+		debug.Log("[storage] [project] Error getting absolute path: %v", err)
 		return
 	}
 
-	debug.Log("  - remove from index: %s", absPath)
+	debug.Log("[storage] [project]   - remove from index: %s", absPath)
 	ProjectFiles.Delete(context.Background(), nil, nil, absPath)
 }
 
@@ -315,11 +316,11 @@ func indexPaths(paths []string) {
 
 		doc, err := toChromemDocument(path)
 		if err != nil {
-			debug.Log("Error converting file to document: %v", err)
+			debug.Log("[storage] [project] Error converting file to document: %v", err)
 			continue
 		}
 
-		debug.Log("  - index: %s", path)
+		debug.Log("[storage] [project]   - index: %s", path)
 		toIndex = append(toIndex, doc)
 	}
 
@@ -349,7 +350,7 @@ func canIndex(path string) bool {
 	// Check if the file is binary
 	isBinary, err := isBinaryFile(path)
 	if err != nil {
-		debug.Log("Error checking file type for %s: %v", path, err)
+		debug.Log("[storage] [project] Error checking file type for %s: %v", path, err)
 		return false
 	}
 	if isBinary {
@@ -398,7 +399,7 @@ func isGitIgnored(path string) bool {
 
 	relpath, err := filepath.Rel(ProjectPath, path)
 	if err != nil {
-		debug.Log("Error getting relative path: %v", err)
+		debug.Log("[storage] [project] Error getting relative path: %v", err)
 		return false
 	}
 

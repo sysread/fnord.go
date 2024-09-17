@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/sysread/fnord/pkg/debug"
 )
 
 type streamer struct {
@@ -44,6 +46,8 @@ type toolOutput struct {
 }
 
 func (c *OpenAIClient) RunThread(threadID string, responseChan chan<- string) {
+	debug.Log("[gpt] Creating thread run %s", threadID)
+
 	s := &streamer{
 		done:          false,
 		msgOutputChan: responseChan,
@@ -138,6 +142,8 @@ func (s *streamer) finish() {
 
 	s.done = true
 	close(s.msgOutputChan)
+
+	debug.Log("[gpt] Finished run")
 }
 
 func (s *streamer) send(msg string) {
@@ -154,6 +160,9 @@ func (s *streamer) fail(msg string, args ...interface{}) {
 	}
 
 	errorMsg := fmt.Sprintf(msg, args...)
+
+	debug.Log("[gpt] error: %s", errorMsg)
+
 	s.send(errorMsg)
 	s.finish()
 }

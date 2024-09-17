@@ -17,7 +17,7 @@ var Facts *chromem.Collection
 
 // InitializeFactsCollection initializes the facts collection in the chromem database.
 func InitializeFactsCollection(config *config.Config) error {
-	debug.Log("Initializing facts collection facts:%s", config.Box)
+	debug.Log("[storage] [facts] Initializing facts collection facts:%s", config.Box)
 	var err error
 	collectionName := "facts:" + config.Box
 	Facts, err = DB.GetOrCreateCollection(collectionName, nil, nil)
@@ -26,13 +26,13 @@ func InitializeFactsCollection(config *config.Config) error {
 
 // ResetFactCollection removes all facts from the collection.
 func ResetFactCollection() error {
-	debug.Log("Resetting facts collection")
+	debug.Log("[storage] [facts] Resetting facts collection")
 	return Facts.Delete(context.Background(), nil, nil, "")
 }
 
 // CreateFact stores a new fact and returns its UUID.
 func CreateFact(content string) (string, error) {
-	debug.Log("Creating fact: '%s'", content)
+	debug.Log("[storage] [facts] Creating fact: '%s'", content)
 
 	id := uuid.New().String()
 	now := time.Now().Format(time.RFC3339)
@@ -47,36 +47,36 @@ func CreateFact(content string) (string, error) {
 
 	err := Facts.AddDocuments(context.Background(), []chromem.Document{document}, 1)
 	if err != nil {
-		debug.Log("Error creating fact: %v", err)
+		debug.Log("[storage] [facts] Error creating fact: %v", err)
 		return "", err
 	}
 
-	debug.Log("Created fact with ID: %s", id)
+	debug.Log("[storage] [facts] Created fact with ID: %s", id)
 	return id, nil
 }
 
 // ReadFact retrieves a fact by UUID.
 func ReadFact(id string) (string, error) {
-	debug.Log("Reading fact: %s", id)
+	debug.Log("[storage] [facts] Reading fact: %s", id)
 
 	document, err := Facts.GetByID(context.Background(), id)
 	if err != nil {
-		debug.Log("Fact not found: %s", id)
+		debug.Log("[storage] [facts] Fact not found: %s", id)
 		return "", err
 	}
 
-	debug.Log("Read fact with ID: %s", id)
+	debug.Log("[storage] [facts] Read fact with ID: %s", id)
 	return document.Content, nil
 }
 
 // UpdateFact modifies the content of an existing fact.
 func UpdateFact(id, content string) (string, error) {
-	debug.Log("Updating fact %s to '%s'", id, content)
+	debug.Log("[storage] [facts] Updating fact %s to '%s'", id, content)
 
 	// Find the existing entry
 	existingEntry, err := Facts.GetByID(context.Background(), id)
 	if err != nil {
-		debug.Log("Fact not found; creating instead: %s", id)
+		debug.Log("[storage] [facts] Fact not found; creating instead: %s", id)
 		return CreateFact(content)
 	}
 
@@ -99,31 +99,31 @@ func UpdateFact(id, content string) (string, error) {
 	// Add the updated entry
 	_, err = id, Facts.AddDocuments(context.Background(), []chromem.Document{doc}, 1)
 	if err != nil {
-		debug.Log("Failed to update fact: %s", id)
+		debug.Log("[storage] [facts] Failed to update fact: %s", id)
 		return "", err
 	}
 
-	debug.Log("Updated fact %s", id)
+	debug.Log("[storage] [facts] Updated fact %s", id)
 	return id, nil
 }
 
 // DeleteFact removes a fact by UUID.
 func DeleteFact(id string) error {
-	debug.Log("Deleting fact: %s", id)
+	debug.Log("[storage] [facts] Deleting fact: %s", id)
 
 	err := Facts.Delete(context.Background(), nil, nil, id)
 	if err != nil {
-		debug.Log("Error deleting fact: %s", id)
+		debug.Log("[storage] [facts] Error deleting fact: %s", id)
 		return err
 	}
 
-	debug.Log("Deleted fact: %s", id)
+	debug.Log("[storage] [facts] Deleted fact: %s", id)
 	return nil
 }
 
 // SearchFact returns a list of facts that match the query.
 func SearchFacts(query string, numResults int) ([]Result, error) {
-	debug.Log("Searching facts for %d results using query '%s'", numResults, query)
+	debug.Log("[storage] [facts] Searching facts for %d results using query '%s'", numResults, query)
 
 	maxResults := Facts.Count()
 	if numResults > maxResults {
@@ -131,19 +131,19 @@ func SearchFacts(query string, numResults int) ([]Result, error) {
 	}
 
 	if numResults == 0 {
-		debug.Log("No indexed facts to search!")
+		debug.Log("[storage] [facts] No indexed facts to search!")
 		return []Result{}, nil
 	}
 
 	results, err := Facts.Query(context.Background(), query, numResults, nil, nil)
 	if err != nil {
-		debug.Log("Error querying facts: %v", err)
+		debug.Log("[storage] [facts] Error querying facts: %v", err)
 		return nil, err
 	}
 
 	var found []Result
 	for _, doc := range results {
-		debug.Log("Found fact: %s", doc.ID)
+		debug.Log("[storage] [facts] Found fact: %s", doc.ID)
 		found = append(found, Result{
 			ID:      doc.ID,
 			Content: doc.Content,
