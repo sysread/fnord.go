@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/sysread/fnord/pkg/debug"
 	"github.com/sysread/fnord/pkg/fnord"
 	"github.com/sysread/fnord/pkg/messages"
 	"github.com/sysread/fnord/pkg/storage"
@@ -20,10 +21,25 @@ type ChatManager struct {
 
 // NewChatManager creates a new ChatManager instance.
 func NewChatManager(fnord *fnord.Fnord) *ChatManager {
-	return &ChatManager{
+	cm := &ChatManager{
 		Conversation: messages.NewConversation(),
 		fnord:        fnord,
 	}
+
+	if fnord.Config.ProjectPath != "" {
+		debug.Log("Informing the assistant that %s is the selected project", fnord.Config.ProjectPath)
+
+		// Start the new thread off by explaining that the project is selected
+		// and available via the `query_project_files` tool.
+		msg := messages.NewMessage(messages.You,
+			fmt.Sprintf("The project at `%s` is visible to you. Use the `query_project_files` tool as needed to search its contents.", fnord.Config.ProjectPath),
+			false,
+		)
+
+		cm.AddMessage(msg)
+	}
+
+	return cm
 }
 
 // AddMessage adds a message to the conversation and persists the conversation.
