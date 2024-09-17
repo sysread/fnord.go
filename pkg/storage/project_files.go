@@ -263,6 +263,10 @@ func addDirRecursive(watcher *fsnotify.Watcher, dir string) error {
 				return filepath.SkipDir
 			}
 
+			if isGitIgnored(path) {
+				return filepath.SkipDir
+			}
+
 			err = watcher.Add(path)
 			if err != nil {
 				return err
